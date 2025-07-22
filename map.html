@@ -17,11 +17,18 @@
     #location-list { list-style: none; padding: 0; }
 
     /* 상단 필터바 */
-    #filters {
-      display: flex; flex-wrap: wrap;
-      align-items: center; justify-content: space-between;
-      gap: 12px; padding: 10px; background: #f0f0f0;
-    }
+#filters {
+  display: flex; /* ❌ 기존 */
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px;
+  background: #f0f0f0;
+  overflow-x: auto;      /* ✅ 추가: 가로 스크롤 허용 */
+  white-space: nowrap;   /* ✅ 추가: 줄바꿈 금지 */
+  -webkit-overflow-scrolling: touch; /* ✅ 모바일 부드러운 스크롤 */
+}
     .filter-group { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
     #month-filter label { margin-right: 6px; white-space: nowrap; }
     #search {
@@ -38,11 +45,10 @@
     /* 반응형 모바일 대응 */
 @media (max-width: 768px) {
   #filters {
-    flex-direction: row;      /* ✅ 한 줄 기본 유지 */
-    flex-wrap: wrap;          /* ✅ 공간이 부족하면 줄바꿈 */
-    justify-content: flex-start;
-    gap: 8px;
+    max-height: none;    /* ✅ 세로 높이 제한 제거 */
+    flex-direction: row; /* ✅ 가로 스크롤 유지 */
   }
+}
   /* ✅ 오른쪽 끝 버튼 그룹 (내 위치 / 목록 보기 / 마커 설명) */
   #filters .filter-group:last-child {
     margin-left: auto;
