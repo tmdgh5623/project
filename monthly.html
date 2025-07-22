@@ -22,12 +22,27 @@
       overflow-x: auto;
       max-height: 80vh;
       overflow-y: auto;
+      position: relative; /* ✅ 그림자 및 애니메이션 효과 적용 위해 */
+      border: 1px solid #ccc; /* ✅ 테두리로 스크롤 영역 강조 */
+      scroll-behavior: smooth;
+    }
+
+    /* ✅ 스크롤 가능함을 나타내는 그림자 */
+    .table-container::after {
+      content: "";
+      position: absolute;
+      right: 0;
+      top: 0;
+      width: 20px;
+      height: 100%;
+      background: linear-gradient(to left, rgba(0,0,0,0.1), transparent);
+      pointer-events: none;
     }
 
     table {
       width: 100%;
       border-collapse: collapse;
-      table-layout: fixed; /* ✅ 고정된 열 너비 유지 */
+      table-layout: fixed;
       min-width: 1300px;
     }
 
@@ -47,28 +62,28 @@
       z-index: 2;
     }
 
-    /* ✅ PC 고정 너비 (요청하신 비율 적용) */
-    th:nth-child(1), td:nth-child(1) { width: 3.5%; }  /* 구분 */
-    th:nth-child(2), td:nth-child(2) { width: 3.5%; }  /* 점검구분 */
-    th:nth-child(3), td:nth-child(3) { width: 12%; }   /* 대상처명 */
-    th:nth-child(4), td:nth-child(4) { width: 3%; }    /* 등급 */
-    th:nth-child(5), td:nth-child(5) { width: 7%; }    /* 주용도 */
-    th:nth-child(6), td:nth-child(6) { width: 6%; }    /* 사용승인일 */
-    th:nth-child(7), td:nth-child(7) { width: 18%; }   /* 주소 */
-    th:nth-child(8), td:nth-child(8) { width: 10%; }   /* 연락처 */
-    th:nth-child(9), td:nth-child(9) { width: 5%; }    /* 연면적 */
-    th:nth-child(10), td:nth-child(10) { width: 3%; }  /* 옥내 */
-    th:nth-child(11), td:nth-child(11) { width: 3%; }  /* S/P */
-    th:nth-child(12), td:nth-child(12) { width: 3%; }  /* 가스 */
-    th:nth-child(13), td:nth-child(13) { width: 3%; }  /* 세대점검 */
-    th:nth-child(14), td:nth-child(14) { width: 3%; }  /* 세대 */
-    th:nth-child(15), td:nth-child(15) { width: 12%; } /* 비고 */
-    th:nth-child(16), td:nth-child(16) { width: 5%; }  /* 메모 */
+    /* ✅ PC 고정 너비 */
+    th:nth-child(1), td:nth-child(1) { width: 3.5%; }
+    th:nth-child(2), td:nth-child(2) { width: 3.5%; }
+    th:nth-child(3), td:nth-child(3) { width: 12%; }
+    th:nth-child(4), td:nth-child(4) { width: 3%; }
+    th:nth-child(5), td:nth-child(5) { width: 7%; }
+    th:nth-child(6), td:nth-child(6) { width: 6%; }
+    th:nth-child(7), td:nth-child(7) { width: 18%; }
+    th:nth-child(8), td:nth-child(8) { width: 10%; }
+    th:nth-child(9), td:nth-child(9) { width: 5%; }
+    th:nth-child(10), td:nth-child(10) { width: 3%; }
+    th:nth-child(11), td:nth-child(11) { width: 3%; }
+    th:nth-child(12), td:nth-child(12) { width: 3%; }
+    th:nth-child(13), td:nth-child(13) { width: 3%; }
+    th:nth-child(14), td:nth-child(14) { width: 3%; }
+    th:nth-child(15), td:nth-child(15) { width: 12%; }
+    th:nth-child(16), td:nth-child(16) { width: 5%; }
 
     @media screen and (max-width:1024px) {
       table {
         min-width: 1000px;
-        table-layout: auto; /* 모바일은 자동 */
+        table-layout: auto;
       }
       th, td {
         font-size: 12px;
@@ -105,7 +120,7 @@
     </select>
   </div>
 
-  <div class="table-container">
+  <div class="table-container" id="table-container">
     <table id="target-table">
       <thead id="table-head"></thead>
       <tbody></tbody>
@@ -117,31 +132,34 @@
     const tableHead = document.querySelector("#table-head");
     const tableBody = document.querySelector("#target-table tbody");
     const monthSelect = document.getElementById("month");
+    const tableContainer = document.getElementById("table-container");
     let allData = [];
 
-async function fetchData() {
-  try {
-    const res = await fetch(API_URL);
-    if (!res.ok) throw new Error("API 연결 실패");
-    allData = await res.json();
+    async function fetchData() {
+      try {
+        const res = await fetch(API_URL);
+        if (!res.ok) throw new Error("API 연결 실패");
+        allData = await res.json();
 
-    // ✅ 현재 월 자동 선택
-    const today = new Date();
-    const currentMonth = String(today.getMonth() + 1).padStart(2, "0");
-    monthSelect.value = currentMonth;
+        // ✅ 현재 월 자동 선택
+        const today = new Date();
+        const currentMonth = String(today.getMonth() + 1).padStart(2, "0");
+        monthSelect.value = currentMonth;
 
-    // ✅ 선택된 월의 데이터만 표시
-    const filtered = allData.filter(row => {
-      const monthNum = row["월"].replace("월", "").padStart(2, "0");
-      return monthNum === currentMonth;
-    });
-    renderTable(filtered);
+        const filtered = allData.filter(row => {
+          const monthNum = row["월"].replace("월", "").padStart(2, "0");
+          return monthNum === currentMonth;
+        });
+        renderTable(filtered);
 
-  } catch (err) {
-    alert("데이터를 불러올 수 없습니다. API URL과 권한을 확인하세요.");
-    console.error(err);
-  }
-}
+        // ✅ 모바일에서 자동 좌우 스크롤 애니메이션 실행
+        triggerScrollAnimation();
+
+      } catch (err) {
+        alert("데이터를 불러올 수 없습니다. API URL과 권한을 확인하세요.");
+        console.error(err);
+      }
+    }
 
     function renderTable(data) {
       tableBody.innerHTML = "";
@@ -180,7 +198,20 @@ async function fetchData() {
         return monthNum === selectedMonth;
       });
       renderTable(filtered);
+      triggerScrollAnimation();
     });
+
+    function triggerScrollAnimation() {
+      if (window.innerWidth <= 1024) { // ✅ 모바일/태블릿에서만
+        tableContainer.scrollLeft = 0;
+        setTimeout(() => {
+          tableContainer.scrollTo({ left: 100, behavior: "smooth" });
+        }, 500);
+        setTimeout(() => {
+          tableContainer.scrollTo({ left: 0, behavior: "smooth" });
+        }, 1500);
+      }
+    }
 
     window.onload = fetchData;
   </script>
