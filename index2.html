@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>월별 대상처 리스트</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    h1 { font-size: 20px; margin-bottom: 10px; }
+    select { padding: 5px; margin-bottom: 10px; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { border: 1px solid #ccc; padding: 5px; text-align: center; }
+    th { background: #f2f2f2; }
+  </style>
+</head>
+<body>
+  <h1>월별 대상처 리스트</h1>
+
+  <label for="month">월 선택: </label>
+  <select id="month">
+    <option value="">전체</option>
+    <option value="1월">1월</option>
+    <option value="2월">2월</option>
+    <option value="3월">3월</option>
+    <option value="4월">4월</option>
+    <option value="5월">5월</option>
+    <option value="6월">6월</option>
+    <option value="7월">7월</option>
+    <option value="8월">8월</option>
+    <option value="9월">9월</option>
+    <option value="10월">10월</option>
+    <option value="11월">11월</option>
+    <option value="12월">12월</option>
+  </select>
+
+  <table id="target-table">
+    <thead id="table-head"></thead>
+    <tbody></tbody>
+  </table>
+
+ <script>
+  const API_URL = "https://script.google.com/macros/s/AKfycbyyKQinyNtANc1hVy0820RdugA-Gu1AzVu4fx8Y7v6SjUwfEnSK-vTpcTnIm1zsBLgCHw/exec";
+  const tableHead = document.querySelector("#table-head");
+  const tableBody = document.querySelector("#target-table tbody");
+  const monthSelect = document.getElementById("month");
+  let allData = [];
+
+  function fetchData() {
+    const script = document.createElement("script");
+    script.src = `${API_URL}?callback=handleData&_=${Date.now()}`; 
+    document.body.appendChild(script);
+  }
+
+  function handleData(data) {
+    allData = data;
+    renderTable(allData);
+  }
+
+  function renderTable(data) {
+    tableBody.innerHTML = "";
+    if (!data.length) return;
+
+    if (!tableHead.innerHTML) {
+      tableHead.innerHTML = "<tr>" + Object.keys(data[0])
+        .map(h => `<th>${h}</th>`)
+        .join("") + "</tr>";
+    }
+
+    data.forEach(row => {
+      const tr = document.createElement("tr");
+      tr.innerHTML = Object.keys(row)
+        .map(k => `<td>${row[k] || ""}</td>`)
+        .join("");
+      tableBody.appendChild(tr);
+    });
+  }
+
+  monthSelect.addEventListener("change", () => {
+    const selectedMonth = monthSelect.value;
+    if (!selectedMonth) {
+      renderTable(allData);
+    } else {
+      const filtered = allData.filter(row => row["월"] === selectedMonth);
+      renderTable(filtered);
+    }
+  });
+
+  fetchData();
+</script>
+
+</body>
+</html>
