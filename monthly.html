@@ -22,22 +22,12 @@
       overflow-x: auto;
       max-height: 80vh;
       overflow-y: auto;
-      position: relative; /* ✅ 그림자 및 애니메이션 효과 적용 위해 */
-      border: 1px solid #ccc; /* ✅ 테두리로 스크롤 영역 강조 */
+      position: relative;
+      border: 1px solid #ccc;
       scroll-behavior: smooth;
     }
 
-    /* ✅ 스크롤 가능함을 나타내는 그림자 */
-    .table-container::after {
-      content: "";
-      position: absolute;
-      right: 0;
-      top: 0;
-      width: 20px;
-      height: 100%;
-      background: linear-gradient(to left, rgba(0,0,0,0.1), transparent);
-      pointer-events: none;
-    }
+    /* ✅ 그림자는 JS로 동적으로 추가/제거 (CSS 고정 제거) */
 
     table {
       width: 100%;
@@ -89,6 +79,18 @@
         font-size: 12px;
         padding: 4px;
       }
+    }
+
+    /* ✅ 오른쪽 그림자 (JS에서 클래스 추가 시만 보임) */
+    .scroll-shadow::after {
+      content: "";
+      position: absolute;
+      right: 0;
+      top: 0;
+      width: 20px;
+      height: 100%;
+      background: linear-gradient(to left, rgba(0,0,0,0.1), transparent);
+      pointer-events: none;
     }
   </style>
 </head>
@@ -152,9 +154,7 @@
         });
         renderTable(filtered);
 
-        // ✅ 모바일에서 자동 좌우 스크롤 애니메이션 실행
         triggerScrollAnimation();
-
       } catch (err) {
         alert("데이터를 불러올 수 없습니다. API URL과 권한을 확인하세요.");
         console.error(err);
@@ -189,6 +189,8 @@
         });
         tableBody.appendChild(tr);
       });
+
+      updateScrollShadow();
     }
 
     monthSelect.addEventListener("change", () => {
@@ -202,7 +204,7 @@
     });
 
     function triggerScrollAnimation() {
-      if (window.innerWidth <= 1024) { // ✅ 모바일/태블릿에서만
+      if (window.innerWidth <= 1024) {
         tableContainer.scrollLeft = 0;
         setTimeout(() => {
           tableContainer.scrollTo({ left: 100, behavior: "smooth" });
@@ -212,6 +214,23 @@
         }, 1500);
       }
     }
+
+    function updateScrollShadow() {
+      if (tableContainer.scrollWidth > tableContainer.clientWidth) {
+        tableContainer.classList.add("scroll-shadow");
+      } else {
+        tableContainer.classList.remove("scroll-shadow");
+      }
+    }
+
+    tableContainer.addEventListener("scroll", () => {
+      // ✅ 스크롤 끝나면 그림자 제거
+      if (tableContainer.scrollLeft + tableContainer.clientWidth >= tableContainer.scrollWidth - 5) {
+        tableContainer.classList.remove("scroll-shadow");
+      } else {
+        tableContainer.classList.add("scroll-shadow");
+      }
+    });
 
     window.onload = fetchData;
   </script>
