@@ -7,7 +7,6 @@
   <style>
     body { font-family: Arial, sans-serif; margin: 0; }
 
-    /* ✅ 상단 회색 통일 */
     #top-bar {
       background: #f0f0f0;
       padding: 8px 15px;
@@ -15,77 +14,78 @@
       align-items: center;
       gap: 10px;
     }
+    h1 { font-size: 18px; margin: 0; }
+    select { padding: 5px; font-size: 14px; }
 
-    h1 {
-      font-size: 18px;
-      margin: 0;
+    .table-container {
+      width: 100%;
+      overflow-x: auto;
+      max-height: 80vh;
+      overflow-y: auto;
     }
 
-    select {
-      padding: 5px;
-      font-size: 14px;
-    }
-
-    /* ✅ 표 전체화면 확장 */
     table {
       width: 100%;
       border-collapse: collapse;
-      margin-top: 0;
-      table-layout: fixed; /* ✅ 고정 레이아웃으로 열 너비 % 적용 */
+      table-layout: fixed; /* ✅ 고정된 열 너비 유지 */
+      min-width: 1300px;
     }
 
     th, td {
       border: 1px solid #ccc;
       padding: 5px;
       text-align: center;
-      word-wrap: break-word;
       font-size: 14px;
+      word-wrap: break-word;
+      white-space: pre-line; /* ✅ 줄바꿈 유지 */
     }
 
     th {
       background: #f2f2f2;
+      position: sticky;
+      top: 0;
+      z-index: 2;
     }
 
-    /* ✅ 열 너비를 백분율로 변경 */
-    th:nth-child(1), td:nth-child(1) { width: 5%; }   /* 구분 */
-    th:nth-child(2), td:nth-child(2) { width: 6%; }   /* 점검구분 */
-    th:nth-child(3), td:nth-child(3) { width: 12%; }  /* 대상처명 */
-    th:nth-child(4), td:nth-child(4) { width: 3%; }   /* 등급 */
-    th:nth-child(5), td:nth-child(5) { width: 8%; }   /* 주용도 */
-    th:nth-child(6), td:nth-child(6) { width: 8%; }   /* 사용승인일 */
-    th:nth-child(7), td:nth-child(7) { width: 18%; }  /* 주소 */
-    th:nth-child(8), td:nth-child(8) { width: 10%; }  /* 연락처 */
-    th:nth-child(9), td:nth-child(9) { width: 5%; }   /* 연면적 */
-    th:nth-child(10), td:nth-child(10) { width: 3%; } /* 옥내 */
-    th:nth-child(11), td:nth-child(11) { width: 3%; } /* S/P */
-    th:nth-child(12), td:nth-child(12) { width: 3%; } /* 가스 */
-    th:nth-child(13), td:nth-child(13) { width: 3%; } /* 세대점검 */
-    th:nth-child(14), td:nth-child(14) { width: 3%; } /* 세대 */
-    th:nth-child(15), td:nth-child(15) { width: 5%; } /* 비고 */
-    th:nth-child(16), td:nth-child(16) { width: 5%; } /* 메모 */
+    /* ✅ PC 고정 너비 (요청하신 비율 적용) */
+    th:nth-child(1), td:nth-child(1) { width: 3.5%; }  /* 구분 */
+    th:nth-child(2), td:nth-child(2) { width: 3.5%; }  /* 점검구분 */
+    th:nth-child(3), td:nth-child(3) { width: 12%; }   /* 대상처명 */
+    th:nth-child(4), td:nth-child(4) { width: 3%; }    /* 등급 */
+    th:nth-child(5), td:nth-child(5) { width: 7%; }    /* 주용도 */
+    th:nth-child(6), td:nth-child(6) { width: 6%; }    /* 사용승인일 */
+    th:nth-child(7), td:nth-child(7) { width: 18%; }   /* 주소 */
+    th:nth-child(8), td:nth-child(8) { width: 10%; }   /* 연락처 */
+    th:nth-child(9), td:nth-child(9) { width: 5%; }    /* 연면적 */
+    th:nth-child(10), td:nth-child(10) { width: 3%; }  /* 옥내 */
+    th:nth-child(11), td:nth-child(11) { width: 3%; }  /* S/P */
+    th:nth-child(12), td:nth-child(12) { width: 3%; }  /* 가스 */
+    th:nth-child(13), td:nth-child(13) { width: 3%; }  /* 세대점검 */
+    th:nth-child(14), td:nth-child(14) { width: 3%; }  /* 세대 */
+    th:nth-child(15), td:nth-child(15) { width: 12%; } /* 비고 */
+    th:nth-child(16), td:nth-child(16) { width: 5%; }  /* 메모 */
 
-    .container { padding: 0; } /* ✅ 여백 제거 */
+    @media screen and (max-width:1024px) {
+      table {
+        min-width: 1000px;
+        table-layout: auto; /* 모바일은 자동 */
+      }
+      th, td {
+        font-size: 12px;
+        padding: 4px;
+      }
+    }
   </style>
 </head>
-
 <body>
   <!-- ✅ 공통 상단바 -->
   <div style="background:#2c3e50; color:white; padding:10px; display:flex; justify-content:flex-end; gap:10px;">
-    <button onclick="window.location.href='index.html'" style="background:white; color:black; padding:6px 12px; border:none; border-radius:4px; cursor:pointer;">
-      홈
-    </button>
-    <button onclick="window.location.href='monthly.html'" style="background:white; color:black; padding:6px 12px; border:none; border-radius:4px; cursor:pointer;">
-      월별 대상처 리스트
-    </button>
-    <button onclick="window.location.href='map.html'" style="background:white; color:black; padding:6px 12px; border:none; border-radius:4px; cursor:pointer;">
-      지도 보기
-    </button>
-    <button onclick="window.location.href='schedule.html'" style="background:white; color:black; padding:6px 12px; border:none; border-radius:4px; cursor:pointer;">
-      스케줄 관리
-    </button>
+    <button onclick="location.href='index.html'" style="background:white; color:black; padding:6px 12px; border:none; border-radius:4px; cursor:pointer;">홈</button>
+    <button onclick="location.href='monthly.html'" style="background:white; color:black; padding:6px 12px; border:none; border-radius:4px; cursor:pointer;">월별 대상처 리스트</button>
+    <button onclick="location.href='map.html'" style="background:white; color:black; padding:6px 12px; border:none; border-radius:4px; cursor:pointer;">지도 보기</button>
+    <button onclick="location.href='schedule.html'" style="background:white; color:black; padding:6px 12px; border:none; border-radius:4px; cursor:pointer;">스케줄 관리</button>
   </div>
 
-  <!-- ✅ 지도보기와 동일한 상단 회색 -->
   <div id="top-bar">
     <h1>월별 대상처 리스트</h1>
     <label for="month"><strong>월 선택:</strong></label>
@@ -105,7 +105,7 @@
     </select>
   </div>
 
-  <div class="container">
+  <div class="table-container">
     <table id="target-table">
       <thead id="table-head"></thead>
       <tbody></tbody>
@@ -119,19 +119,29 @@
     const monthSelect = document.getElementById("month");
     let allData = [];
 
-    async function fetchData() {
-      try {
-        const res = await fetch(API_URL);
-        if (!res.ok) throw new Error("API 연결 실패");
-        const jsonp = await res.text();
-        const jsonStr = jsonp.replace(/^callback\(/, "").replace(/\);$/, "");
-        allData = JSON.parse(jsonStr);
-        renderTable(allData);
-      } catch (err) {
-        alert("데이터를 불러올 수 없습니다. API URL과 권한을 확인하세요.");
-        console.error(err);
-      }
-    }
+async function fetchData() {
+  try {
+    const res = await fetch(API_URL);
+    if (!res.ok) throw new Error("API 연결 실패");
+    allData = await res.json();
+
+    // ✅ 현재 월 자동 선택
+    const today = new Date();
+    const currentMonth = String(today.getMonth() + 1).padStart(2, "0");
+    monthSelect.value = currentMonth;
+
+    // ✅ 선택된 월의 데이터만 표시
+    const filtered = allData.filter(row => {
+      const monthNum = row["월"].replace("월", "").padStart(2, "0");
+      return monthNum === currentMonth;
+    });
+    renderTable(filtered);
+
+  } catch (err) {
+    alert("데이터를 불러올 수 없습니다. API URL과 권한을 확인하세요.");
+    console.error(err);
+  }
+}
 
     function renderTable(data) {
       tableBody.innerHTML = "";
