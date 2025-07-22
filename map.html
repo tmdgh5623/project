@@ -52,7 +52,10 @@
     }
   </style>
 
-  <script src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=857fa34114fff62fa488d807a8666fcc&autoload=false&libraries=services,clusterer"></script>
+  <script 
+  src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=857fa34114fff62fa488d807a8666fcc&autoload=false&libraries=services,clusterer" 
+  defer>
+</script>
 </head>
 <body>
 
@@ -132,87 +135,86 @@ async function geocodeWithCache(address, name) {
   });
 }
 
-kakao.maps.load(() => {
-(async () => {
-  map = new kakao.maps.Map(document.getElementById('map'), {
-    center: new kakao.maps.LatLng(37.5665, 126.9780), level: 7
-  });
-  geocoder = new kakao.maps.services.Geocoder();
-  kakao.maps.event.addListener(map, 'zoom_changed', updateLabelVisibility);
-
-  const response = await fetch("https://script.google.com/macros/s/AKfycbw12xR7tz1fq1iQNbY-WIZUQ4C5wMFOE2vLr70ydsKNgdOx17t2iq3dnok0sjMgpVr_Ig/exec");
-  rawData = await response.json();
-
-// ✅ 기존 캐시에 있는 데이터는 geocodedData에 먼저 추가하고,
-// ✅ 캐시에 없는 주소만 addressQueue에 넣음
-const addressSet = new Set(), addressQueue = [];
-for (const sheet in rawData) {
-  for (const item of rawData[sheet]) {
-    const roadAddr = item["도로명주소"], jibunAddr = item["지번주소"];
-    const address = roadAddr || jibunAddr;
-    const name = item["월관리대상처"] || item["단타대상처"] || item["거래처명"] || "이름없음";
-    if (!address || name.includes("계약해지")) continue;
-    const addressKey = address + "_" + name;
-    if (addressSet.has(addressKey)) continue;
-    addressSet.add(addressKey);
-
-    if (geocodeCache[addressKey]) {
-      // ✅ 이미 캐시에 있으면 바로 geocodedData에 추가
-      geocodedData.push({
-        lat: geocodeCache[addressKey].lat,
-        lng: geocodeCache[addressKey].lng,
-        sheet, item
+window.onload = function () {
+  kakao.maps.load(() => {
+    (async () => {
+      map = new kakao.maps.Map(document.getElementById('map'), {
+        center: new kakao.maps.LatLng(37.5665, 126.9780),
+        level: 7
       });
-    } else {
-      // ✅ 캐시에 없으면 API 호출 대상에 추가
-      addressQueue.push({ address, roadAddr, jibunAddr, sheet, item });
-    }
-  }
-}
+      geocoder = new kakao.maps.services.Geocoder();
+      kakao.maps.event.addListener(map, 'zoom_changed', updateLabelVisibility);
 
-  const maxConcurrent = 5;
-  let currentIndex = 0;
-  async function processNextBatch() {
-    const batch = addressQueue.slice(currentIndex, currentIndex + maxConcurrent);
-    const promises = batch.map(async ({ roadAddr, jibunAddr, sheet, item }) => {
-      const name = item["월관리대상처"] || item["단타대상처"] || item["거래처명"] || "이름없음";
-      const addrList = [];
-      if (roadAddr) addrList.push(roadAddr);
-      if (jibunAddr) addrList.push(jibunAddr);
+      const response = await fetch("https://script.google.com/macros/s/AKfycbw12xR7tz1fq1iQNbY-WIZUQ4C5wMFOE2vLr70ydsKNgdOx17t2iq3dnok0sjMgpVr_Ig/exec");
+      rawData = await response.json();
 
-      let pos = null;
-      for (const addr of addrList) {
-        pos = await geocodeWithCache(addr, name);
-        if (pos) break;
+      const addressSet = new Set(), addressQueue = [];
+      for (const sheet in rawData) {
+        for (const item of rawData[sheet]) {
+          const roadAddr = item["도로명주소"], jibunAddr = item["지번주소"];
+          const address = roadAddr || jibunAddr;
+          const name = item["월관리대상처"] || item["단타대상처"] || item["거래처명"] || "이름없음";
+          if (!address || name.includes("계약해지")) continue;
+          const addressKey = address + "_" + name;
+          if (addressSet.has(addressKey)) continue;
+          addressSet.add(addressKey);
+
+          if (geocodeCache[addressKey]) {
+            geocodedData.push({
+              lat: geocodeCache[addressKey].lat,
+              lng: geocodeCache[addressKey].lng,
+              sheet, item
+            });
+          } else {
+            addressQueue.push({ address, roadAddr, jibunAddr, sheet, item });
+          }
+        }
       }
-      if (pos) geocodedData.push({ lat: pos.lat, lng: pos.lng, sheet, item });
-    });
-    await Promise.all(promises);
-    currentIndex += maxConcurrent;
-    if (currentIndex < addressQueue.length) {
-      await new Promise(r => setTimeout(r, 100));
+
+      const maxConcurrent = 5;
+      let currentIndex = 0;
+      async function processNextBatch() {
+        const batch = addressQueue.slice(currentIndex, currentIndex + maxConcurrent);
+        const promises = batch.map(async ({ roadAddr, jibunAddr, sheet, item }) => {
+          const name = item["월관리대상처"] || item["단타대상처"] || item["거래처명"] || "이름없음";
+          const addrList = [];
+          if (roadAddr) addrList.push(roadAddr);
+          if (jibunAddr) addrList.push(jibunAddr);
+
+          let pos = null;
+          for (const addr of addrList) {
+            pos = await geocodeWithCache(addr, name);
+            if (pos) break;
+          }
+          if (pos) geocodedData.push({ lat: pos.lat, lng: pos.lng, sheet, item });
+        });
+        await Promise.all(promises);
+        currentIndex += maxConcurrent;
+        if (currentIndex < addressQueue.length) {
+          await new Promise(r => setTimeout(r, 100));
+          await processNextBatch();
+        }
+      }
       await processNextBatch();
-    }
-  }
-  await processNextBatch();
 
-  geocodedData.forEach(({ sheet, item }) => {
-    const key = getKey(sheet, item);
-    if (!key.includes("계약해지")) checkedLocations.add(key);
-  });
+      geocodedData.forEach(({ sheet, item }) => {
+        const key = getKey(sheet, item);
+        if (!key.includes("계약해지")) checkedLocations.add(key);
+      });
 
-  renderMarkers();
-  renderLocationList();
-
-  document.querySelectorAll('input[name="month"]').forEach(cb => {
-    cb.addEventListener("change", () => {
-      resetCheckedLocationsByMonth();
       renderMarkers();
       renderLocationList();
-    });
+
+      document.querySelectorAll('input[name="month"]').forEach(cb => {
+        cb.addEventListener("change", () => {
+          resetCheckedLocationsByMonth();
+          renderMarkers();
+          renderLocationList();
+        });
+      });
+    })();
   });
-})();
-});
+};
 function getSelectedMonths() {
   return Array.from(document.querySelectorAll('input[name="month"]:checked'))
     .map(cb => cb.value);
