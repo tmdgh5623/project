@@ -6,21 +6,28 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
   <style>
+body {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;  /* ✅ 스크롤바 제거 */
+  font-family: Arial, sans-serif;
+}
     /* 지도 및 기본 구조 */
-    #map { width: 100%; height: 90vh; }
+    #map {   width: 100%; height: 90vh; 
+  margin: 0; padding: 0; }
     #main-container { display: flex; }
     #sidebar {
-      width: 300px; max-height: 90vh;
-      overflow-y: auto; background: #fff;
-      border-right: 1px solid #ccc; padding: 10px;
+  width: 300px; max-height: 90vh; 
+  overflow-y: auto; background: #fff; 
+  border-right: 1px solid #ccc; padding: 0 5px; 
     }
     #location-list { list-style: none; padding: 0; }
 
     /* 상단 필터바 */
     #filters {
-      display: flex; flex-wrap: wrap;
-      align-items: center; justify-content: space-between;
-      gap: 12px; padding: 10px; background: #f0f0f0;
+  display: flex; flex-wrap: wrap; 
+  align-items: center; justify-content: space-between; 
+  gap: 8px; padding: 5px 10px; background: #f0f0f0; 
     }
     .filter-group { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
     #month-filter label { margin-right: 6px; white-space: nowrap; }
@@ -59,7 +66,7 @@
   <button onclick="window.location.href='index.html'" style="background:white; color:black; padding:6px 12px; border:none; border-radius:4px; cursor:pointer;">
     홈
   </button>
-  <button onclick="window.location.href='list.html'" style="background:white; color:black; padding:6px 12px; border:none; border-radius:4px; cursor:pointer;">
+  <button onclick="window.location.href='monthly.html'" style="background:white; color:black; padding:6px 12px; border:none; border-radius:4px; cursor:pointer;">
     월별 대상처 리스트
   </button>
   <button onclick="window.location.href='map.html'" style="background:white; color:black; padding:6px 12px; border:none; border-radius:4px; cursor:pointer;">
@@ -531,3 +538,4 @@ window.renderLocationList = renderLocationList;
 </script>
 </body>
 </html>
+

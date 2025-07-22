@@ -5,43 +5,115 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>월별 대상처 리스트</title>
   <style>
-    body { font-family: Arial, sans-serif; margin: 20px; }
-    h1 { font-size: 20px; margin-bottom: 10px; }
-    select { padding: 5px; margin-bottom: 10px; }
-    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-    th, td { border: 1px solid #ccc; padding: 5px; text-align: center; }
-    th { background: #f2f2f2; }
+    body { font-family: Arial, sans-serif; margin: 0; }
+
+    /* ✅ 상단 회색 통일 */
+    #top-bar {
+      background: #f0f0f0;
+      padding: 8px 15px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    h1 {
+      font-size: 18px;
+      margin: 0;
+    }
+
+    select {
+      padding: 5px;
+      font-size: 14px;
+    }
+
+    /* ✅ 표 전체화면 확장 */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 0;
+      table-layout: fixed; /* ✅ 고정 레이아웃으로 열 너비 % 적용 */
+    }
+
+    th, td {
+      border: 1px solid #ccc;
+      padding: 5px;
+      text-align: center;
+      word-wrap: break-word;
+      font-size: 14px;
+    }
+
+    th {
+      background: #f2f2f2;
+    }
+
+    /* ✅ 열 너비를 백분율로 변경 */
+    th:nth-child(1), td:nth-child(1) { width: 5%; }   /* 구분 */
+    th:nth-child(2), td:nth-child(2) { width: 6%; }   /* 점검구분 */
+    th:nth-child(3), td:nth-child(3) { width: 12%; }  /* 대상처명 */
+    th:nth-child(4), td:nth-child(4) { width: 3%; }   /* 등급 */
+    th:nth-child(5), td:nth-child(5) { width: 8%; }   /* 주용도 */
+    th:nth-child(6), td:nth-child(6) { width: 8%; }   /* 사용승인일 */
+    th:nth-child(7), td:nth-child(7) { width: 18%; }  /* 주소 */
+    th:nth-child(8), td:nth-child(8) { width: 10%; }  /* 연락처 */
+    th:nth-child(9), td:nth-child(9) { width: 5%; }   /* 연면적 */
+    th:nth-child(10), td:nth-child(10) { width: 3%; } /* 옥내 */
+    th:nth-child(11), td:nth-child(11) { width: 3%; } /* S/P */
+    th:nth-child(12), td:nth-child(12) { width: 3%; } /* 가스 */
+    th:nth-child(13), td:nth-child(13) { width: 3%; } /* 세대점검 */
+    th:nth-child(14), td:nth-child(14) { width: 3%; } /* 세대 */
+    th:nth-child(15), td:nth-child(15) { width: 5%; } /* 비고 */
+    th:nth-child(16), td:nth-child(16) { width: 5%; } /* 메모 */
+
+    .container { padding: 0; } /* ✅ 여백 제거 */
   </style>
 </head>
+
 <body>
-  <h1>월별 대상처 리스트</h1>
+  <!-- ✅ 공통 상단바 -->
+  <div style="background:#2c3e50; color:white; padding:10px; display:flex; justify-content:flex-end; gap:10px;">
+    <button onclick="window.location.href='index.html'" style="background:white; color:black; padding:6px 12px; border:none; border-radius:4px; cursor:pointer;">
+      홈
+    </button>
+    <button onclick="window.location.href='monthly.html'" style="background:white; color:black; padding:6px 12px; border:none; border-radius:4px; cursor:pointer;">
+      월별 대상처 리스트
+    </button>
+    <button onclick="window.location.href='map.html'" style="background:white; color:black; padding:6px 12px; border:none; border-radius:4px; cursor:pointer;">
+      지도 보기
+    </button>
+    <button onclick="window.location.href='schedule.html'" style="background:white; color:black; padding:6px 12px; border:none; border-radius:4px; cursor:pointer;">
+      스케줄 관리
+    </button>
+  </div>
 
-  <label for="month">월 선택: </label>
-  <select id="month">
-    <option value="">전체</option>
-    <option value="1월">1월</option>
-    <option value="2월">2월</option>
-    <option value="3월">3월</option>
-    <option value="4월">4월</option>
-    <option value="5월">5월</option>
-    <option value="6월">6월</option>
-    <option value="7월">7월</option>
-    <option value="8월">8월</option>
-    <option value="9월">9월</option>
-    <option value="10월">10월</option>
-    <option value="11월">11월</option>
-    <option value="12월">12월</option>
-  </select>
+  <!-- ✅ 지도보기와 동일한 상단 회색 -->
+  <div id="top-bar">
+    <h1>월별 대상처 리스트</h1>
+    <label for="month"><strong>월 선택:</strong></label>
+    <select id="month">
+      <option value="01">1월</option>
+      <option value="02">2월</option>
+      <option value="03">3월</option>
+      <option value="04">4월</option>
+      <option value="05">5월</option>
+      <option value="06">6월</option>
+      <option value="07">7월</option>
+      <option value="08">8월</option>
+      <option value="09">9월</option>
+      <option value="10">10월</option>
+      <option value="11">11월</option>
+      <option value="12">12월</option>
+    </select>
+  </div>
 
-  <table id="target-table">
-    <thead id="table-head"></thead>
-    <tbody></tbody>
-  </table>
+  <div class="container">
+    <table id="target-table">
+      <thead id="table-head"></thead>
+      <tbody></tbody>
+    </table>
+  </div>
 
   <script>
-    // ✅ 아래 URL을 새 배포 URL로 교체하세요
     const API_URL = "https://script.google.com/macros/s/AKfycbyyKQinyNtANc1hVy0820RdugA-Gu1AzVu4fx8Y7v6SjUwfEnSK-vTpcTnIm1zsBLgCHw/exec";
-
     const tableHead = document.querySelector("#table-head");
     const tableBody = document.querySelector("#target-table tbody");
     const monthSelect = document.getElementById("month");
@@ -51,7 +123,9 @@
       try {
         const res = await fetch(API_URL);
         if (!res.ok) throw new Error("API 연결 실패");
-        allData = await res.json();
+        const jsonp = await res.text();
+        const jsonStr = jsonp.replace(/^callback\(/, "").replace(/\);$/, "");
+        allData = JSON.parse(jsonStr);
         renderTable(allData);
       } catch (err) {
         alert("데이터를 불러올 수 없습니다. API URL과 권한을 확인하세요.");
@@ -63,27 +137,42 @@
       tableBody.innerHTML = "";
       tableHead.innerHTML = "";
 
-      if (!data.length) return;
+      if (!data.length) {
+        tableHead.innerHTML = "<tr><th>데이터 없음</th></tr>";
+        return;
+      }
 
-      // ✅ 테이블 헤더 생성
-      tableHead.innerHTML = "<tr>" + Object.keys(data[0])
-        .map(h => `<th>${h}</th>`)
-        .join("") + "</tr>";
+      const headers = Object.keys(data[0]).filter(h => h !== "월");
+      tableHead.innerHTML = "<tr>" + headers.map(h => `<th>${h}</th>`).join("") + "</tr>";
 
-      // ✅ 데이터 행 생성
       data.forEach(row => {
         const tr = document.createElement("tr");
-        tr.innerHTML = Object.keys(row)
-          .map(k => `<td>${row[k] || ""}</td>`)
-          .join("");
+        headers.forEach(h => {
+          const cellData = row[h];
+          const td = document.createElement("td");
+          if (typeof cellData === "object" && cellData !== null) {
+            td.textContent = cellData.value || "";
+            td.style.backgroundColor = cellData.bg || "";
+            td.style.color = cellData.font || "";
+          } else {
+            td.textContent = cellData || "";
+          }
+          tr.appendChild(td);
+        });
         tableBody.appendChild(tr);
       });
     }
 
     monthSelect.addEventListener("change", () => {
       const selectedMonth = monthSelect.value;
-      if (!selectedMonth) {
-        renderTable(allData);
-      } else {
-        const filtered = allData.filter(row => row["월"] === selectedMonth);
-        rend
+      const filtered = allData.filter(row => {
+        const monthNum = row["월"].replace("월", "").padStart(2, "0");
+        return monthNum === selectedMonth;
+      });
+      renderTable(filtered);
+    });
+
+    window.onload = fetchData;
+  </script>
+</body>
+</html>
