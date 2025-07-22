@@ -54,11 +54,20 @@
 
 </head>
 <body>
-<div style="background:#2c3e50; color:white; padding:10px; display:flex; gap:10px;">
-  <button onclick="window.location.href='index.html'" style="background:white; color:black;">홈</button>
-  <button onclick="window.location.href='list.html'" style="background:white; color:black;">월별 리스트</button>
-  <button onclick="window.location.href='map.html'" style="background:white; color:black;">지도 보기</button>
-  <button onclick="window.location.href='schedule.html'" style="background:white; color:black;">스케줄 관리</button>
+<!-- ✅ 공통 상단바 -->
+<div style="background:#2c3e50; color:white; padding:10px; display:flex; justify-content:flex-end; gap:10px;">
+  <button onclick="window.location.href='index.html'" style="background:white; color:black; padding:6px 12px; border:none; border-radius:4px; cursor:pointer;">
+    홈
+  </button>
+  <button onclick="window.location.href='list.html'" style="background:white; color:black; padding:6px 12px; border:none; border-radius:4px; cursor:pointer;">
+    월별 대상처 리스트
+  </button>
+  <button onclick="window.location.href='map.html'" style="background:white; color:black; padding:6px 12px; border:none; border-radius:4px; cursor:pointer;">
+    지도 보기
+  </button>
+  <button onclick="window.location.href='schedule.html'" style="background:white; color:black; padding:6px 12px; border:none; border-radius:4px; cursor:pointer;">
+    스케줄 관리
+  </button>
 </div>
 <!-- ✅ 상단바 필터 -->
 <div id="filters">
