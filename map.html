@@ -89,18 +89,54 @@ body {
 @media (max-width: 768px) {
   #filters {
     display: grid;
-    grid-auto-flow: column;       /* 가로로 흐르게 */
-    grid-template-columns: repeat(2, 1fr); /* 2개씩만 보이게 */
-    grid-auto-columns: 50%;       /* 스크롤 시 한 번에 2개씩 이동 */
-    overflow-x: auto;             /* 가로 스크롤 활성화 */
-    scroll-snap-type: x mandatory;/* 스크롤 스냅 (선택) */
-    gap: 8px;
+    grid-auto-flow: column;
+    grid-template-columns: repeat(4, 100%); /* ✅ 4구간 모두 가로 한 줄씩 표시 */
+    grid-auto-columns: 100%;               /* ✅ 스크롤 시 각 구간 꽉 차게 */
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    gap: 12px;
   }
 
   #filters > div {
-    scroll-snap-align: start;     /* 스냅 정렬 (선택) */
+    min-width: 320px;                      /* ✅ 각 구간 최소 폭 넓게 확보 */
+    scroll-snap-align: start;
+  }
+
+  .search-group {
+    min-width: 320px;                      /* ✅ 검색창 줄바꿈 방지 */
+    flex-wrap: nowrap;
+  }
+
+  .search-item input {
+    max-width: 100%;                       /* ✅ 검색창 꽉 채워 표시 */
   }
 }
+@media (max-width: 768px) {
+  #filters {
+    display: grid;
+    grid-auto-flow: column;
+    grid-template-columns: repeat(4, 100%); /* ✅ 4구간 모두 가로 한 줄씩 표시 */
+    grid-auto-columns: 100%;               /* ✅ 스크롤 시 각 구간 꽉 차게 */
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    gap: 12px;
+  }
+
+  #filters > div {
+    min-width: 320px;                      /* ✅ 각 구간 최소 폭 넓게 확보 */
+    scroll-snap-align: start;
+  }
+
+  .search-group {
+    min-width: 320px;                      /* ✅ 검색창 줄바꿈 방지 */
+    flex-wrap: nowrap;
+  }
+
+  .search-item input {
+    max-width: 100%;                       /* ✅ 검색창 꽉 채워 표시 */
+  }
+}
+
 /* ✅ 기존 input 스타일 그대로 */
 #search {
   padding: 4px 8px; border: 1px solid #ccc;
