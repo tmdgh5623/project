@@ -130,7 +130,7 @@
   <div class="scroll-indicator" id="scroll-indicator" style="display:none;">⬅️ 좌우로 스크롤하세요 ➡️</div>
 
   <script>
-    // ✅ 반드시 최신 Apps Script URL 입력
+    // ✅ 최신 Apps Script URL
     const API_URL = "https://script.google.com/macros/s/AKfycbz8nYuO0qBDx4h2O0sGgZRh_HV_8kUBxBpDoGAIH6LTTKkiyDbqZv-Qk0gCTHyRAceMWA/exec";
 
     const tableHead = document.querySelector("#table-head");
@@ -139,17 +139,27 @@
     const tableContainer = document.getElementById("table-container");
     const scrollIndicator = document.getElementById("scroll-indicator");
 
-    // ✅ Apps Script에서 월별 데이터만 가져오기
+    let isNavigating = false; // ✅ 페이지 이동 중인지 확인 플래그
+
+    // ✅ 상단바 버튼 클릭 시 이동 플래그 활성화
+    document.querySelectorAll("button").forEach(btn => {
+      btn.addEventListener("click", () => {
+        isNavigating = true;
+      });
+    });
+
     async function fetchData(month = "") {
       try {
         const res = await fetch(`${API_URL}?month=${month || "all"}`);
         if (!res.ok) throw new Error("API 연결 실패");
         const data = await res.json();
-        renderTable(data);
+        if (!isNavigating) renderTable(data); // ✅ 이동 중이면 테이블 렌더링 생략
         triggerScrollAnimation();
       } catch (err) {
-        alert("데이터를 불러올 수 없습니다. API URL과 권한을 확인하세요.");
-        console.error(err);
+        if (!isNavigating) { // ✅ 이동 중이면 alert 생략
+          alert("데이터를 불러올 수 없습니다. API URL과 권한을 확인하세요.");
+          console.error(err);
+        }
       }
     }
 
