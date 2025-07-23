@@ -28,13 +28,11 @@ body {
   display: grid;
   grid-template-areas:
     "left-top right-top"
-    "left-bottom right-bottom"; /* 상단 2칸 + 하단 2칸 */
-  grid-template-columns: 1fr auto;
+    "left-bottom right-bottom";
+  grid-template-columns: 1fr 1fr;
   gap: 8px 20px;
   padding: 8px 12px;
   background: #f0f0f0;
-  overflow-x: auto;    /* 모바일에서 가로 스크롤 */
-  white-space: nowrap; /* 줄바꿈 방지 */
 }
 
 .filter-left-top    { grid-area: left-top; }
@@ -59,22 +57,50 @@ body {
   white-space: nowrap;
 }
 
+/* ✅ 대상처명 + 주소검색 (항상 가로 2열 유지) */
+.search-group {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 240px; /* 모바일에서 너무 좁아지는 것 방지 */
+}
+
+.search-item {
+  display: flex;
+  flex-direction: column;
+  min-width: 120px; /* 모바일에서도 최소 크기 보장 */
+  flex: 1;
+}
+
+.search-item label {
+  margin-bottom: 4px;
+  white-space: nowrap; /* 줄바꿈 방지 */
+}
+
+.search-item input {
+  padding: 4px 8px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  width: 100%;
+  max-width: 200px;
+}
+
 /* ✅ 모바일 대응 (가로 스크롤만 허용, 줄바꿈 금지) */
 @media (max-width: 768px) {
   #filters {
     display: grid;
-    grid-template-areas:
-      "left-top"
-      "left-bottom"
-      "right-top"
-      "right-bottom"; /* 순차적으로 2개씩 세로 배치 */
-    grid-template-columns: 1fr; 
-    gap: 8px 0;
-    overflow-x: hidden;
+    grid-auto-flow: column;       /* 가로로 흐르게 */
+    grid-template-columns: repeat(2, 1fr); /* 2개씩만 보이게 */
+    grid-auto-columns: 50%;       /* 스크롤 시 한 번에 2개씩 이동 */
+    overflow-x: auto;             /* 가로 스크롤 활성화 */
+    scroll-snap-type: x mandatory;/* 스크롤 스냅 (선택) */
+    gap: 8px;
+  }
+
+  #filters > div {
+    scroll-snap-align: start;     /* 스냅 정렬 (선택) */
   }
 }
-
-
 /* ✅ 기존 input 스타일 그대로 */
 #search {
   padding: 4px 8px; border: 1px solid #ccc;
@@ -139,12 +165,17 @@ body {
   </div>
 
   <!-- 오른쪽 위: 대상처명 + 주소검색 -->
-  <div class="filter-group filter-right-top">
+<!-- 오른쪽 위: 대상처명 + 주소검색 -->
+<div class="filter-group filter-right-top search-group">
+  <div class="search-item">
     <label for="search-name"><strong>📌 대상처명:</strong></label>
     <input type="text" id="search-name" placeholder="대상처명을 입력">
+  </div>
+  <div class="search-item">
     <label for="search-addr"><strong>📍 주소검색:</strong></label>
     <input type="text" id="search-addr" placeholder="주소 입력 후 Enter">
   </div>
+</div>
 
   <!-- 왼쪽 하단: 내 위치 + 목록 보기 -->
   <div class="filter-group filter-left-bottom">
