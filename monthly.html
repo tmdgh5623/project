@@ -29,8 +29,8 @@
 
     table {
       width: 100%;
-      border-collapse: collapse;
-      table-layout: fixed;
+      border-collapse: separate; /* ✅ sticky와 border 충돌 방지 */
+      border-spacing: 0;         /* ✅ 틈 제거 */
       min-width: 1300px;
     }
 
@@ -41,13 +41,28 @@
       font-size: 14px;
       word-wrap: break-word;
       white-space: pre-line;
+      background: #fff;
     }
 
-    th {
+    thead th {
       background: #f2f2f2;
       position: sticky;
       top: 0;
-      z-index: 2;
+      z-index: 5;
+    }
+
+    /* ✅ 대상처명(3열) sticky */
+    th:nth-child(3), td:nth-child(3) {
+      position: sticky;
+      left: 0;
+      z-index: 4;
+      background: #fff;
+      box-shadow: 1px 0 0 #ccc inset; /* ✅ 테두리 시각화 */
+    }
+
+    thead th:nth-child(3) {
+      z-index: 6;
+      background: #f2f2f2;
     }
 
     /* ✅ PC 고정 너비 */
@@ -69,14 +84,8 @@
     th:nth-child(16), td:nth-child(16) { width: 5%; }
 
     @media screen and (max-width:1024px) {
-      table {
-        min-width: 1000px;
-        table-layout: auto;
-      }
-      th, td {
-        font-size: 12px;
-        padding: 4px;
-      }
+      table { min-width: 1000px; table-layout: auto; }
+      th, td { font-size: 12px; padding: 4px; }
 
       .scroll-indicator {
         text-align: center;
@@ -85,7 +94,6 @@
         margin-top: 5px;
         animation: blink 1.2s infinite alternate;
       }
-
       @keyframes blink {
         0% { opacity: 0.3; }
         100% { opacity: 1; }
@@ -106,18 +114,10 @@
     <h1>월별 대상처 리스트</h1>
     <label for="month"><strong>월 선택:</strong></label>
     <select id="month">
-      <option value="01">1월</option>
-      <option value="02">2월</option>
-      <option value="03">3월</option>
-      <option value="04">4월</option>
-      <option value="05">5월</option>
-      <option value="06">6월</option>
-      <option value="07">7월</option>
-      <option value="08">8월</option>
-      <option value="09">9월</option>
-      <option value="10">10월</option>
-      <option value="11">11월</option>
-      <option value="12">12월</option>
+      <option value="01">1월</option><option value="02">2월</option><option value="03">3월</option>
+      <option value="04">4월</option><option value="05">5월</option><option value="06">6월</option>
+      <option value="07">7월</option><option value="08">8월</option><option value="09">9월</option>
+      <option value="10">10월</option><option value="11">11월</option><option value="12">12월</option>
     </select>
   </div>
 
@@ -130,33 +130,34 @@
   <div class="scroll-indicator" id="scroll-indicator" style="display:none;">⬅️ 좌우로 스크롤하세요 ➡️</div>
 
   <script>
-    // ✅ 최신 Apps Script URL
     const API_URL = "https://script.google.com/macros/s/AKfycbz8nYuO0qBDx4h2O0sGgZRh_HV_8kUBxBpDoGAIH6LTTKkiyDbqZv-Qk0gCTHyRAceMWA/exec";
-
     const tableHead = document.querySelector("#table-head");
     const tableBody = document.querySelector("#target-table tbody");
     const monthSelect = document.getElementById("month");
     const tableContainer = document.getElementById("table-container");
     const scrollIndicator = document.getElementById("scroll-indicator");
 
-    let isNavigating = false; // ✅ 페이지 이동 중인지 확인 플래그
+    let isNavigating = false;
+    let abortController = null;
 
-    // ✅ 상단바 버튼 클릭 시 이동 플래그 활성화
     document.querySelectorAll("button").forEach(btn => {
       btn.addEventListener("click", () => {
         isNavigating = true;
+        if (abortController) abortController.abort(); // ✅ fetch 중단
       });
     });
 
     async function fetchData(month = "") {
       try {
-        const res = await fetch(`${API_URL}?month=${month || "all"}`);
+        if (abortController) abortController.abort();
+        abortController = new AbortController();
+        const res = await fetch(`${API_URL}?month=${month || "all"}`, { signal: abortController.signal });
         if (!res.ok) throw new Error("API 연결 실패");
         const data = await res.json();
-        if (!isNavigating) renderTable(data); // ✅ 이동 중이면 테이블 렌더링 생략
+        if (!isNavigating) renderTable(data);
         triggerScrollAnimation();
       } catch (err) {
-        if (!isNavigating) { // ✅ 이동 중이면 alert 생략
+        if (!isNavigating && err.name !== "AbortError") {
           alert("데이터를 불러올 수 없습니다. API URL과 권한을 확인하세요.");
           console.error(err);
         }
@@ -195,19 +196,13 @@
       updateScrollIndicator();
     }
 
-    monthSelect.addEventListener("change", () => {
-      fetchData(monthSelect.value);
-    });
+    monthSelect.addEventListener("change", () => fetchData(monthSelect.value));
 
     function triggerScrollAnimation() {
       if (window.innerWidth <= 1024) {
         tableContainer.scrollLeft = 0;
-        setTimeout(() => {
-          tableContainer.scrollTo({ left: 100, behavior: "smooth" });
-        }, 500);
-        setTimeout(() => {
-          tableContainer.scrollTo({ left: 0, behavior: "smooth" });
-        }, 1500);
+        setTimeout(() => tableContainer.scrollTo({ left: 100, behavior: "smooth" }), 500);
+        setTimeout(() => tableContainer.scrollTo({ left: 0, behavior: "smooth" }), 1500);
       }
     }
 
@@ -227,7 +222,6 @@
       }
     });
 
-    // ✅ 현재 월 자동 선택 후 로딩
     window.onload = () => {
       const today = new Date();
       const currentMonth = String(today.getMonth() + 1).padStart(2, "0");
