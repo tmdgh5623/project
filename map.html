@@ -23,42 +23,83 @@ body {
     }
     #location-list { list-style: none; padding: 0; }
 
-    /* 상단 필터바 */
-    #filters {
-  display: flex; flex-wrap: wrap; 
-  align-items: center; justify-content: space-between; 
-  gap: 8px; padding: 5px 10px; background: #f0f0f0; 
-    }
-    .filter-group { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
-    #month-filter label { margin-right: 6px; white-space: nowrap; }
-    #search {
-      padding: 4px 8px; border: 1px solid #ccc;
-      border-radius: 4px;
-    }
-    .label-overlay {
-      background: white; border: 1px solid #888;
-      padding: 2px 6px; font-size: 12px;
-      pointer-events: none; white-space: nowrap;
-      box-shadow: 0 0 2px rgba(0, 0, 0, 0.3); z-index: 11;
-    }
+/* ✅ 상단 필터바 */
+#filters {
+  display: grid;
+  grid-template-areas:
+    "left-top right-top"
+    "left-bottom right-bottom"; /* 상단 2칸 + 하단 2칸 */
+  grid-template-columns: 1fr auto;
+  gap: 8px 20px;
+  padding: 8px 12px;
+  background: #f0f0f0;
+  overflow-x: auto;    /* 모바일에서 가로 스크롤 */
+  white-space: nowrap; /* 줄바꿈 방지 */
+}
 
-    /* 반응형 모바일 대응 */
-    @media (max-width: 768px) {
-      html, body { margin: 0; padding: 0; height: 100vh; overflow: hidden; }
-      #filters { max-height: 20vh; overflow-y: auto; flex-direction: column; align-items: flex-start; }
-      #main-container { display: flex; flex-direction: column; height: calc(100vh - 10vh); }
-      #sidebar {
-        flex: 0 0 0; overflow-y: hidden;
-        transition: flex-basis 0.3s ease;
-        border-bottom: 1px solid #ccc; background: #fff;
-      }
-      #sidebar.open { flex: 0 0 10vh; overflow-y: auto; }
-      #map { flex: 1 1 auto; min-height: 60vh; }
-      #location-list { padding: 8px; font-size: 14px; }
-      #search { width: 100%; max-width: 300px; }
-    }
+.filter-left-top    { grid-area: left-top; }
+.filter-right-top   { grid-area: right-top; text-align: right; }
+.filter-left-bottom { grid-area: left-bottom; }
+.filter-right-bottom{ grid-area: right-bottom; text-align: right; }
+
+.filter-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ✅ 월 필터 (6개씩 2줄 고정) */
+#month-filter {
+  display: grid;
+  grid-template-columns: repeat(6, auto);
+  gap: 4px 8px;
+  margin-left: 6px;
+}
+#month-filter label {
+  white-space: nowrap;
+}
+
+/* ✅ 모바일 대응 (가로 스크롤만 허용, 줄바꿈 금지) */
+@media (max-width: 768px) {
+  #filters {
+    display: grid;
+    grid-template-areas:
+      "left-top"
+      "left-bottom"
+      "right-top"
+      "right-bottom"; /* 순차적으로 2개씩 세로 배치 */
+    grid-template-columns: 1fr; 
+    gap: 8px 0;
+    overflow-x: hidden;
+  }
+}
+
+
+/* ✅ 기존 input 스타일 그대로 */
+#search {
+  padding: 4px 8px; border: 1px solid #ccc;
+  border-radius: 4px;
+}
+
+.label-overlay {
+  background: white; border: 1px solid #888;
+  padding: 2px 6px; font-size: 12px;
+  pointer-events: none; white-space: nowrap;
+  box-shadow: 0 0 2px rgba(0, 0, 0, 0.3); z-index: 11;
+}
+
+  #main-container { display: flex; flex-direction: column; height: calc(100vh - 10vh); }
+  #sidebar {
+    flex: 0 0 0; overflow-y: hidden;
+    transition: flex-basis 0.3s ease;
+    border-bottom: 1px solid #ccc; background: #fff;
+  }
+  #sidebar.open { flex: 0 0 10vh; overflow-y: auto; }
+  #map { flex: 1 1 auto; min-height: 60vh; }
+  #location-list { padding: 8px; font-size: 14px; }
+  #search { width: 100%; max-width: 300px; }
+}
   </style>
-
 </head>
 <body>
 <!-- ✅ 공통 상단바 -->
@@ -78,7 +119,8 @@ body {
 </div>
 <!-- ✅ 상단바 필터 -->
 <div id="filters">
-  <div class="filter-group">
+  <!-- 왼쪽 위: 월 필터 -->
+  <div class="filter-group filter-left-top">
     <label><strong>월:</strong></label>
     <div id="month-filter">
       <label><input type="checkbox" name="month" value="01" onchange="renderMarkers(); renderLocationList()">1월</label>
@@ -96,16 +138,22 @@ body {
     </div>
   </div>
 
-  <div class="filter-group">
+  <!-- 오른쪽 위: 대상처명 + 주소검색 -->
+  <div class="filter-group filter-right-top">
     <label for="search-name"><strong>📌 대상처명:</strong></label>
     <input type="text" id="search-name" placeholder="대상처명을 입력">
     <label for="search-addr"><strong>📍 주소검색:</strong></label>
     <input type="text" id="search-addr" placeholder="주소 입력 후 Enter">
   </div>
 
-  <div class="filter-group" style="margin-left:auto;">
+  <!-- 왼쪽 하단: 내 위치 + 목록 보기 -->
+  <div class="filter-group filter-left-bottom">
     <button id="locate-me" style="padding:6px 12px; border:1px solid #ccc; border-radius:4px; background:white; cursor:pointer;">📍 내 위치</button>
     <button id="toggle-list" style="padding:6px 12px; border:1px solid #ccc; border-radius:4px; background:white; cursor:pointer;">📋 목록 보기</button>
+  </div>
+
+  <!-- 오른쪽 하단: 마커 설명 -->
+  <div class="filter-group filter-right-bottom">
     <b>📌 마커 설명</b>
     <div style="display:flex; align-items:center; gap:8px;">
       <div><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMiIgaGVpZ2h0PSIzMiI+PHJlY3Qgd2lkdGg9IjMyIiBoZWlnaHQ9IjMyIiBmaWxsPSJub25lIi8+PGNpcmNsZSBjeD0iMTYiIGN5PSIxNiIgcj0iNyIgZmlsbD0iI0IyMjIyMiIvPjwvc3ZnPg==" width="16" height="16"> 종합</div>
