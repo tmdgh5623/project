@@ -139,29 +139,19 @@
     const scrollIndicator = document.getElementById("scroll-indicator");
     let allData = [];
 
-    async function fetchData() {
-      try {
-        const res = await fetch(API_URL);
-        if (!res.ok) throw new Error("API 연결 실패");
-        allData = await res.json();
+async function fetchData(month = "") {
+  try {
+    const res = await fetch(`${API_URL}?month=${month || "all"}`); // ✅ 특정 월만 API에서 직접 요청
+    if (!res.ok) throw new Error("API 연결 실패");
+    const data = await res.json(); // ✅ allData 사용 안 함
+    renderTable(data);
 
-        // ✅ 현재 월 자동 선택
-        const today = new Date();
-        const currentMonth = String(today.getMonth() + 1).padStart(2, "0");
-        monthSelect.value = currentMonth;
-
-        const filtered = allData.filter(row => {
-          const monthNum = row["월"].replace("월", "").padStart(2, "0");
-          return monthNum === currentMonth;
-        });
-        renderTable(filtered);
-
-        triggerScrollAnimation();
-      } catch (err) {
-        alert("데이터를 불러올 수 없습니다. API URL과 권한을 확인하세요.");
-        console.error(err);
-      }
-    }
+    triggerScrollAnimation();
+  } catch (err) {
+    alert("데이터를 불러올 수 없습니다. API URL과 권한을 확인하세요.");
+    console.error(err);
+  }
+}
 
     function renderTable(data) {
       tableBody.innerHTML = "";
@@ -195,15 +185,9 @@
       updateScrollIndicator();
     }
 
-    monthSelect.addEventListener("change", () => {
-      const selectedMonth = monthSelect.value;
-      const filtered = allData.filter(row => {
-        const monthNum = row["월"].replace("월", "").padStart(2, "0");
-        return monthNum === selectedMonth;
-      });
-      renderTable(filtered);
-      triggerScrollAnimation();
-    });
+monthSelect.addEventListener("change", () => {
+  fetchData(monthSelect.value); // ✅ 선택한 월만 다시 API 호출
+});
 
     function triggerScrollAnimation() {
       if (window.innerWidth <= 1024) {
@@ -233,7 +217,13 @@
       }
     });
 
-    window.onload = fetchData;
+    window.onload = () => {
+  const today = new Date();
+  const currentMonth = String(today.getMonth() + 1).padStart(2, "0");
+  monthSelect.value = currentMonth;
+  fetchData(currentMonth); // ✅ 현재 월 데이터만 API 요청
+};
+
   </script>
 </body>
 </html>
