@@ -40,7 +40,7 @@
       text-align: center;
       font-size: 14px;
       word-wrap: break-word;
-      white-space: pre-line; /* ✅ 줄바꿈 유지 */
+      white-space: pre-line;
     }
 
     th {
@@ -78,7 +78,6 @@
         padding: 4px;
       }
 
-      /* ✅ 모바일용 스크롤 안내 */
       .scroll-indicator {
         text-align: center;
         font-size: 12px;
@@ -131,27 +130,28 @@
   <div class="scroll-indicator" id="scroll-indicator" style="display:none;">⬅️ 좌우로 스크롤하세요 ➡️</div>
 
   <script>
-    const API_URL = "https://script.google.com/macros/s/AKfycbyyKQinyNtANc1hVy0820RdugA-Gu1AzVu4fx8Y7v6SjUwfEnSK-vTpcTnIm1zsBLgCHw/exec";
+    // ✅ 반드시 최신 Apps Script URL 입력
+    const API_URL = "https://script.google.com/macros/s/AKfycbz8nYuO0qBDx4h2O0sGgZRh_HV_8kUBxBpDoGAIH6LTTKkiyDbqZv-Qk0gCTHyRAceMWA/exec";
+
     const tableHead = document.querySelector("#table-head");
     const tableBody = document.querySelector("#target-table tbody");
     const monthSelect = document.getElementById("month");
     const tableContainer = document.getElementById("table-container");
     const scrollIndicator = document.getElementById("scroll-indicator");
-    let allData = [];
 
-async function fetchData(month = "") {
-  try {
-    const res = await fetch(`${API_URL}?month=${month || "all"}`); // ✅ 특정 월만 API에서 직접 요청
-    if (!res.ok) throw new Error("API 연결 실패");
-    const data = await res.json(); // ✅ allData 사용 안 함
-    renderTable(data);
-
-    triggerScrollAnimation();
-  } catch (err) {
-    alert("데이터를 불러올 수 없습니다. API URL과 권한을 확인하세요.");
-    console.error(err);
-  }
-}
+    // ✅ Apps Script에서 월별 데이터만 가져오기
+    async function fetchData(month = "") {
+      try {
+        const res = await fetch(`${API_URL}?month=${month || "all"}`);
+        if (!res.ok) throw new Error("API 연결 실패");
+        const data = await res.json();
+        renderTable(data);
+        triggerScrollAnimation();
+      } catch (err) {
+        alert("데이터를 불러올 수 없습니다. API URL과 권한을 확인하세요.");
+        console.error(err);
+      }
+    }
 
     function renderTable(data) {
       tableBody.innerHTML = "";
@@ -185,9 +185,9 @@ async function fetchData(month = "") {
       updateScrollIndicator();
     }
 
-monthSelect.addEventListener("change", () => {
-  fetchData(monthSelect.value); // ✅ 선택한 월만 다시 API 호출
-});
+    monthSelect.addEventListener("change", () => {
+      fetchData(monthSelect.value);
+    });
 
     function triggerScrollAnimation() {
       if (window.innerWidth <= 1024) {
@@ -217,13 +217,13 @@ monthSelect.addEventListener("change", () => {
       }
     });
 
+    // ✅ 현재 월 자동 선택 후 로딩
     window.onload = () => {
-  const today = new Date();
-  const currentMonth = String(today.getMonth() + 1).padStart(2, "0");
-  monthSelect.value = currentMonth;
-  fetchData(currentMonth); // ✅ 현재 월 데이터만 API 요청
-};
-
+      const today = new Date();
+      const currentMonth = String(today.getMonth() + 1).padStart(2, "0");
+      monthSelect.value = currentMonth;
+      fetchData(currentMonth);
+    };
   </script>
 </body>
 </html>
