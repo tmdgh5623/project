@@ -30,8 +30,8 @@ body {
     "left-top right-top"
     "left-bottom right-bottom";
   grid-template-columns: 1fr 1fr;
-  gap: 8px 20px;
-  padding: 8px 12px;
+  gap: 12px 24px;
+  padding: 12px 16px;
   background: #f0f0f0;
 }
 
@@ -60,21 +60,21 @@ body {
 /* ✅ 대상처명 + 주소검색 (항상 가로 2열 유지) */
 .search-group {
   display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  min-width: 240px; /* 모바일에서 너무 좁아지는 것 방지 */
+  justify-content: flex-start; /* ✅ 왼쪽 정렬 후 오른쪽 여백 */
+  gap: 20px;                   /* ✅ 검색창 사이 간격 넓힘 */
+  margin-left: 12px;           /* ✅ 왼쪽 끝에서 약간 띄움 */
 }
 
+/* ✅ 검색창 레이블 & 입력창 */
 .search-item {
   display: flex;
   flex-direction: column;
-  min-width: 120px; /* 모바일에서도 최소 크기 보장 */
-  flex: 1;
+  min-width: 140px;
 }
 
 .search-item label {
   margin-bottom: 4px;
-  white-space: nowrap; /* 줄바꿈 방지 */
+  white-space: nowrap;
 }
 
 .search-item input {
@@ -85,55 +85,75 @@ body {
   max-width: 200px;
 }
 
-/* ✅ 모바일 대응 (가로 스크롤만 허용, 줄바꿈 금지) */
-@media (max-width: 768px) {
-  #filters {
-    display: grid;
-    grid-auto-flow: column;
-    grid-template-columns: repeat(4, 100%); /* ✅ 4구간 모두 가로 한 줄씩 표시 */
-    grid-auto-columns: 100%;               /* ✅ 스크롤 시 각 구간 꽉 차게 */
-    overflow-x: auto;
-    scroll-snap-type: x mandatory;
-    gap: 12px;
-  }
-
-  #filters > div {
-    min-width: 320px;                      /* ✅ 각 구간 최소 폭 넓게 확보 */
-    scroll-snap-align: start;
-  }
-
-  .search-group {
-    min-width: 320px;                      /* ✅ 검색창 줄바꿈 방지 */
-    flex-wrap: nowrap;
-  }
-
-  .search-item input {
-    max-width: 100%;                       /* ✅ 검색창 꽉 채워 표시 */
-  }
+/* ✅ 상단 필터바 기본 */
+#filters {
+  display: grid;
+  grid-template-areas:
+    "left-top right-top"
+    "left-bottom right-bottom";
+  grid-template-columns: 1fr 1fr;
+  gap: 12px 24px;
+  padding: 12px 16px;
+  background: #f0f0f0;
 }
+
+/* ✅ 대상처명 + 주소검색 */
+.search-group {
+  display: flex;
+  justify-content: flex-start;
+  gap: 20px;         /* 검색창 사이 간격 */
+  margin-left: 12px; /* 왼쪽 여백 */
+}
+
+.search-item {
+  display: flex;
+  flex-direction: column;
+  min-width: 140px;
+}
+
+.search-item label {
+  margin-bottom: 4px;
+  white-space: nowrap;
+}
+
+.search-item input {
+  padding: 4px 8px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  width: 100%;
+  max-width: 200px;
+}
+
+/* ✅ 모바일 대응 */
 @media (max-width: 768px) {
   #filters {
     display: grid;
     grid-auto-flow: column;
-    grid-template-columns: repeat(4, 100%); /* ✅ 4구간 모두 가로 한 줄씩 표시 */
-    grid-auto-columns: 100%;               /* ✅ 스크롤 시 각 구간 꽉 차게 */
+    grid-template-columns: repeat(4, 100%);
+    grid-auto-columns: 100%;
     overflow-x: auto;
     scroll-snap-type: x mandatory;
-    gap: 12px;
+    gap: 16px; /* 모바일 간격 넓힘 */
   }
 
   #filters > div {
-    min-width: 320px;                      /* ✅ 각 구간 최소 폭 넓게 확보 */
+    min-width: 320px;
     scroll-snap-align: start;
   }
 
   .search-group {
-    min-width: 320px;                      /* ✅ 검색창 줄바꿈 방지 */
+    min-width: 320px;
+    justify-content: flex-start;
+    margin-left: 12px; /* 마커 설명과 줄 맞춤 */
     flex-wrap: nowrap;
   }
 
   .search-item input {
-    max-width: 100%;                       /* ✅ 검색창 꽉 채워 표시 */
+    max-width: 100%;
+  }
+
+  .filter-right-bottom {
+    padding-right: 8px; /* 마커 설명 오른쪽으로 살짝 이동 */
   }
 }
 
