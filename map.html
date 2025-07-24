@@ -209,12 +209,13 @@ body {
 }
 
 #sidebar.open::-webkit-scrollbar {
-  width: 6px;                  /* ✅ 스크롤바 두께 */
+  width: 12px;   /* ✅ 세로 스크롤바 두께 (기존 6px → 12px으로 두껍게) */
+  height: 12px;  /* ✅ 가로 스크롤바 두께 (필요 시 설정) */
 }
 
 #sidebar.open::-webkit-scrollbar-thumb {
   background-color: #999;      /* ✅ 스크롤바 색상 */
-  border-radius: 3px;
+  border-radius: 6px;
 }
 
 #sidebar.open::-webkit-scrollbar-track {
