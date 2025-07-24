@@ -198,10 +198,11 @@ body {
     border-bottom: 1px solid #ccc;
   }
 
-  #sidebar.open {
-    max-height: 60vh;                  /* ✅ 화면 높이의 60%까지 허용 */
-    overflow-y: auto;                  /* ✅ 열렸을 때 스크롤 가능 */
-  }
+#sidebar.open {
+  max-height: 60vh;
+  overflow-y: scroll;   /* ✅ 스크롤바 항상 표시 */
+  -webkit-overflow-scrolling: touch; /* ✅ 모바일에서 부드럽게 스크롤 */
+}
 }
   #map { flex: 1 1 auto; min-height: 60vh; }
   #location-list { padding: 8px; font-size: 14px; }
