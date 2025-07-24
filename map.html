@@ -200,8 +200,25 @@ body {
 
 #sidebar.open {
   max-height: 60vh;
-  overflow-y: scroll;   /* ✅ 스크롤바 항상 표시 */
-  -webkit-overflow-scrolling: touch; /* ✅ 모바일에서 부드럽게 스크롤 */
+  overflow-y: scroll;  /* ✅ 스크롤 항상 표시 */
+  -webkit-overflow-scrolling: touch; /* ✅ iOS에서 부드러운 스크롤 */
+
+  /* ✅ 스크롤바 강제 표시 */
+  scrollbar-width: thin;        /* Firefox */
+  scrollbar-color: #999 #f1f1f1; /* Firefox */
+}
+
+#sidebar.open::-webkit-scrollbar {
+  width: 6px;                  /* ✅ 스크롤바 두께 */
+}
+
+#sidebar.open::-webkit-scrollbar-thumb {
+  background-color: #999;      /* ✅ 스크롤바 색상 */
+  border-radius: 3px;
+}
+
+#sidebar.open::-webkit-scrollbar-track {
+  background-color: #f1f1f1;   /* ✅ 스크롤바 배경 */
 }
 }
   #map { flex: 1 1 auto; min-height: 60vh; }
