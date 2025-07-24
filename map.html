@@ -170,13 +170,39 @@ body {
   box-shadow: 0 0 2px rgba(0, 0, 0, 0.3); z-index: 11;
 }
 
-  #main-container { display: flex; flex-direction: column; height: calc(100vh - 10vh); }
-  #sidebar {
-    flex: 0 0 0; overflow-y: hidden;
-    transition: flex-basis 0.3s ease;
-    border-bottom: 1px solid #ccc; background: #fff;
+  #main-container { display: flex; flex-direction: row; height: calc(100vh - 10vh); }
+@media (max-width: 768px) {
+  #main-container {
+    flex-direction: column;  /* ✅ 모바일에서는 기존처럼 세로 배치 유지 */
   }
-  #sidebar.open { flex: 0 0 10vh; overflow-y: auto; }
+}
+#sidebar {
+  width: 300px;                 /* ✅ 좌측 고정 폭 */
+  max-height: 90vh;
+  overflow-y: auto;
+  background: #fff;
+  border-right: 1px solid #ccc; /* ✅ 좌측 구분선 */
+}
+
+#sidebar.open {
+  width: 300px;                 /* ✅ 토글 열림 상태에서도 동일 (PC에서는 항상 열림) */
+}
+
+@media (max-width: 768px) {
+  #sidebar {
+    width: 100%;
+    max-height: 0;
+    overflow-y: hidden;                /* ✅ 닫혔을 때만 숨김 */
+    transition: max-height 0.3s ease;
+    border-right: none;
+    border-bottom: 1px solid #ccc;
+  }
+
+  #sidebar.open {
+    max-height: 60vh;                  /* ✅ 화면 높이의 60%까지 허용 */
+    overflow-y: auto;                  /* ✅ 열렸을 때 스크롤 가능 */
+  }
+}
   #map { flex: 1 1 auto; min-height: 60vh; }
   #location-list { padding: 8px; font-size: 14px; }
   #search { width: 100%; max-width: 300px; }
@@ -638,9 +664,12 @@ function searchAddress() {
 const toggleBtn = document.getElementById("toggle-list");
 const sidebar = document.getElementById("sidebar");
 toggleBtn.addEventListener("click", () => {
-  sidebar.classList.toggle("open");
-  toggleBtn.textContent = sidebar.classList.contains("open") ? "📋 목록 닫기" : "📋 목록 보기";
-  setTimeout(() => { kakao.maps.event.trigger(map, 'resize'); }, 300);
+  if (window.innerWidth <= 768) {  // ✅ 모바일에서만 토글 동작
+    sidebar.classList.toggle("open");
+    toggleBtn.textContent = sidebar.classList.contains("open")
+      ? "📋 목록 닫기" : "📋 목록 보기";
+    setTimeout(() => { kakao.maps.event.trigger(map, 'resize'); }, 300);
+  }
 });
 
 document.getElementById("uncheck-all").addEventListener("click", () => {
