@@ -347,7 +347,7 @@ kakao.maps.load(async function () {
 
     // ✅ 데이터 불러오기
 const response = await fetch("/api/proxy"); // ✅ 프록시 호출
-const rawData = await response.json();
+rawData = await response.json();
 
     // ✅ 캐시 및 주소 처리
     const addressSet = new Set(), addressQueue = [];
