@@ -482,6 +482,17 @@ function renderMarkers() {
     const 연락처 = Array.isArray(item["연락처"]) ? item["연락처"].join("\n") : (item["연락처"] || "").toString();
     const 비고 = Array.isArray(item["비고"]) ? item["비고"].join("\n") : (item["비고"] || "").toString();
     const 건물현황 = Array.isArray(item["건물현황"]) ? item["건물현황"].join("\n") : (item["건물현황"] || "").toString();
+  // ▼ 추가: 계약구분(월점검/단타) 정규화 + 담당자 표시
+  const 계약구분 = String(sheet).includes("단타") ? "단타" : "월점검";
+
+  const 담당자원본 = Array.isArray(item["담당자"])
+    ? item["담당자"].join("\n")
+    : (item["담당자"] || "").toString();
+
+  // 월점검이면 실제 값(없으면 "-"), 단타면 고정 문구
+  const 담당자표시 = (계약구분 === "단타")
+    ? "단타(담당자없음)"
+    : (담당자원본 || "-");
 
     let type = getMarkerType(sheet, item, selectedMonths);
     if (!type) type = "전체";
@@ -524,7 +535,8 @@ function renderMarkers() {
         <table style="border-spacing:0;width:100%;table-layout:fixed;">
           <tbody style="word-break:break-word;">
             <tr><td style="width:80px;text-align:right;padding-top:3px;"><b>대상처명</b></td><td style="padding-left:6px;">${name}</td></tr>
-            <tr><td style="text-align:right;padding-top:3px;"><b>계약구분</b></td><td style="padding-left:6px;">${sheet}</td></tr>
+            <tr><td style="text-align:right;padding-top:3px;"><b>계약구분</b></td><td style="padding-left:6px;">${계약구분}</td></tr>
+<tr><td style="text-align:right;padding-top:3px;"><b>담당자</b></td><td style="padding-left:6px;">${담당자표시.replace(/\n/g,"<br>")}</td></tr>
             ${types.length ? `<tr><td style="text-align:right;padding-top:3px;"><b>점검구분</b></td><td style="padding-left:6px;">${types.join(", ")}</td></tr>` : ""}
             ${item["주용도"] ? `<tr><td style="text-align:right;padding-top:3px;"><b>주용도</b></td><td style="padding-left:6px;">${item["주용도"]}</td></tr>` : ""}
             <tr><td style="text-align:right;padding-top:3px;"><b>점검현황</b></td><td style="padding-left:6px;">${점검현황}</td></tr>
