@@ -1,12 +1,123 @@
-<input id="sid" placeholder="스프레드시트_ID" />
-<button onclick="load()">불러오기</button>
-<pre id="out"></pre>
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>월간 스케줄</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/main.min.css">
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js"></script>
+<style>
+  body { font-family: system-ui, -apple-system, Roboto, 'Noto Sans KR', Arial, sans-serif; margin: 0; background:#f7f7f9;}
+  header { display:flex; align-items:center; gap:8px; padding:12px 16px; background:#0f172a; color:#fff; position:sticky; top:0; z-index:10;}
+  header h1 { font-size:18px; margin:0 12px 0 0; }
+  header input { width:320px; padding:6px 8px; border-radius:6px; border:1px solid #334155; background:#fff; color:#111; }
+  header button { padding:6px 10px; border:0; border-radius:6px; background:#22c55e; color:#081; font-weight:600; cursor:pointer;}
+  .wrap { padding:12px 16px; }
+  .grid { display:grid; grid-template-columns: 1fr 1fr; gap:12px; }
+  .panel { background:#fff; border:1px solid #e5e7eb; border-radius:10px; box-shadow:0 1px 2px rgba(0,0,0,0.04); }
+  .panel h2 { margin:10px 12px; font-size:14px; color:#334155; }
+  .cal { padding:0 10px 10px; }
+  /* 캘린더 높이 고정 + 셀 안에서 스크롤(더보기 팝오버 대신) */
+  .fc { --fc-border-color:#e5e7eb; --fc-today-bg-color:#f0f9ff; }
+  .fc .fc-daygrid-day-frame { height: 130px; }
+  .fc .fc-daygrid-day-events { overflow:auto; max-height: 90px; padding-bottom:6px; }
+  .fc .fc-daygrid-day-number { font-size:11px; color:#64748b; }
+  .fc .fc-event { font-size:11px; line-height:1.15; padding:1px 2px; border-radius:4px; border:1px solid #cbd5e1; background:#e2e8f0; color:#0f172a; }
+  .muted { color:#94a3b8; font-size:12px; margin-left:6px; }
+  @media (max-width: 1200px){ .grid{ grid-template-columns:1fr; } .fc .fc-daygrid-day-frame{ height:160px; } }
+</style>
+</head>
+<body>
+  <header>
+    <h1>월간 스케줄</h1>
+    <input id="sid" placeholder="스프레드시트 ID" />
+    <button id="loadBtn">불러오기</button>
+    <span class="muted">URL에 ?sid=... 를 붙이면 자동 로드됩니다.</span>
+  </header>
+
+  <div class="wrap">
+    <div class="grid">
+      <div class="panel"><h2>1팀</h2><div id="cal1" class="cal"></div></div>
+      <div class="panel"><h2>2팀</h2><div id="cal2" class="cal"></div></div>
+      <div class="panel"><h2>3팀</h2><div id="cal3" class="cal"></div></div>
+      <div class="panel"><h2>4팀</h2><div id="cal4" class="cal"></div></div>
+    </div>
+  </div>
+
 <script>
-  async function load(){
-    const sid = document.getElementById('sid').value.trim();
-    const url = sid ? `/api/schedule?sid=${encodeURIComponent(sid)}` : '/api/schedule';
-    const r = await fetch(url);
-    const j = await r.json();
-    document.getElementById('out').textContent = JSON.stringify(j, null, 2);
+  const qs = new URLSearchParams(location.search);
+  const sidEl = document.getElementById('sid');
+  const defaultSidFromURL = qs.get('sid') || '';
+  sidEl.value = defaultSidFromURL;
+
+  // FullCalendar 4개 준비
+  const cals = [1,2,3,4].map((t,i)=>{
+    const el = document.getElementById('cal'+(i+1));
+    const cal = new FullCalendar.Calendar(el, {
+      initialView: 'dayGridMonth',
+      firstDay: 0, // Sunday
+      locale: 'ko',
+      height: 470, // 패널 내부 높이
+      headerToolbar: { left: 'prev,next today', center: 'title', right: '' },
+      dayMaxEventRows: false, // 우리가 직접 스크롤
+      eventContent: arg => ({ html: `<div>${arg.event.title}</div>` })
+    });
+    cal.render();
+    return cal;
+  });
+
+  async function loadSchedule(sid){
+    if(!sid){ alert('스프레드시트 ID를 입력하세요.'); return; }
+    // 서버리스 API 호출
+    const url = `/api/schedule?sid=${encodeURIComponent(sid)}`;
+    const res = await fetch(url);
+    if(!res.ok){
+      const txt = await res.text();
+      throw new Error(`API 오류: ${res.status} ${txt}`);
+    }
+    const data = await res.json();
+    const events = Array.isArray(data.events) ? data.events : [];
+
+    // 팀별로 분리 → FullCalendar event 형식으로 매핑
+    const byTeam = {1:[],2:[],3:[],4:[]};
+    for(const ev of events){
+      const team = +ev.team;
+      const title = [ev.text, (ev.start||'') && (ev.end||'') ? ` (${ev.start}~${ev.end})` : (ev.start?` (${ev.start})`: '')].join('');
+      const fc = { title, start: ev.date, allDay:true };
+      if(byTeam[team]) byTeam[team].push(fc);
+    }
+
+    // 초기 월을 맞추기 위해 가장 많이 등장한 월로 이동
+    const months = events.map(e => e.date.slice(0,7));
+    const modeMonth = (arr=>{
+      const m = {}; let best=null, cnt=0;
+      arr.forEach(v=>{ m[v]=(m[v]||0)+1; if(m[v]>cnt){cnt=m[v]; best=v;}});
+      return best || new Date().toISOString().slice(0,7);
+    })(months);
+
+    const [yy,mm] = modeMonth.split('-').map(Number);
+    const initDate = new Date(yy, mm-1, 1);
+
+    cals.forEach((cal,idx)=>{
+      cal.gotoDate(initDate);
+      cal.removeAllEvents();
+      cal.addEventSource(byTeam[idx+1]);
+    });
+  }
+
+  document.getElementById('loadBtn').onclick = ()=>{
+    loadSchedule(sidEl.value.trim()).catch(err=>{
+      console.error(err);
+      alert('불러오기 실패: ' + err.message);
+    });
+  };
+
+  // URL에 sid 있으면 자동 로드
+  if(defaultSidFromURL){
+    loadSchedule(defaultSidFromURL).catch(err=>{
+      console.error(err); alert('불러오기 실패: ' + err.message);
+    });
   }
 </script>
+</body>
+</html>

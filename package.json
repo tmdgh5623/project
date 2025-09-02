@@ -1,7 +1,9 @@
 {
+  "name": "fire-inspection-web",
   "private": true,
-  "type": "module",
+  "version": "1.0.0",
+  "engines": { "node": "18.x" },
   "dependencies": {
-    "googleapis": "^131.0.0"
+    "googleapis": "^127.0.0"
   }
 }
