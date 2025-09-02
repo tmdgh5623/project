@@ -1,8 +1,12 @@
 {
   "version": 2,
-  "builds": [{ "src": "api/schedule.js", "use": "@vercel/node" }],
+  "builds": [
+    { "src": "api/*.js", "use": "@vercel/node" },
+    { "src": "*.html", "use": "@vercel/static" }
+  ],
   "routes": [
-    { "src": "/api/schedule", "dest": "/api/schedule.js" },
-    { "src": "/(.*)", "dest": "/schedule.html" }
+    { "src": "/api/(.*)", "dest": "/api/$1.js" },
+    { "src": "/", "dest": "/index.html" },
+    { "src": "/(.*)", "dest": "/$1" }
   ]
 }
