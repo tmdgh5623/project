@@ -1,5 +1,4 @@
 {
-  "name": "schedule",
   "private": true,
   "type": "module",
   "dependencies": {
