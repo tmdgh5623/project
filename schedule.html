@@ -1,79 +1,107 @@
-<script>
-  const SHEET_ID = '17RCw2gBxseB36Ac9kF7zYXZ4qFTaXP7KsAiKY9uPbN4';
-  const API = '/api/schedule';
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <title>월간 스케줄(모든 시트 원본 로드)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <style>
+    body { font-family: Arial, sans-serif; margin:16px; }
+    #ctrls { margin-bottom:12px; display:flex; gap:8px; flex-wrap:wrap; }
+    table { border-collapse: collapse; width: 100%; }
+    th, td { border:1px solid #ddd; padding:6px; font-size:13px; }
+    th { background:#f5f5f5; }
+    select, button { padding:6px 8px; }
+    .sheet-title { font-weight:bold; margin: 16px 0 8px; }
+  </style>
+</head>
+<body>
+  <h1>월간 스케줄(모든 시트 원본 로드)</h1>
 
-  function buildUrl(base, params) {
-    const u = new URL(base, location.origin);
-    Object.entries(params).forEach(([k,v]) => v !== '' && u.searchParams.set(k, v));
-    return u.toString();
-  }
+  <div id="ctrls">
+    <label>시트 선택:
+      <select id="sheetSelect"></select>
+    </label>
+    <button id="reloadBtn" type="button">새로고침</button>
+  </div>
 
-  async function loadAll() {
-    const app = document.getElementById('app');
-    app.textContent = '로딩 중…';
+  <div id="app">로딩 중…</div>
 
-    try {
-      const url = buildUrl(API, { mode: 'raw', sid: SHEET_ID });
-      const res = await fetch(url, { cache: 'no-store' });
-      const data = await res.json().catch(() => ({}));
+  <script>
+    const SHEET_ID = '17RCw2gBxseB36Ac9kF7zYXZ4qFTaXP7KsAiKY9uPbN4';
+    const API = '/api/schedule';
 
-      // ▼▼ 중요: 응답 검증을 강화 ▼▼
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      if (!data || data.ok !== true) throw new Error(data && data.error ? data.error : '서버 응답 오류');
-      if (!data.sheets || typeof data.sheets !== 'object') {
-        throw new Error('유효한 sheets 데이터가 없습니다.');
+    function buildUrl(base, params){
+      const u = new URL(base, location.origin);
+      Object.entries(params).forEach(([k,v]) => v !== '' && u.searchParams.set(k, v));
+      return u.toString();
+    }
+
+    async function loadAll(){
+      const app = document.getElementById('app');
+      app.textContent = '로딩 중…';
+      try {
+        const url = buildUrl(API, { mode: 'raw', sid: SHEET_ID });
+        const res = await fetch(url, { cache: 'no-store' });
+        const data = await res.json().catch(() => ({}));
+
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        if (!data || data.ok !== true) throw new Error(data?.error || '서버 응답 오류');
+        if (!data.sheets || typeof data.sheets !== 'object') throw new Error('유효한 sheets 데이터가 없습니다.');
+
+        window.__ALL = data.sheets;
+        const names = Object.keys(window.__ALL || {});
+        if (!names.length) { app.textContent = '데이터 없음'; return; }
+
+        fillSheetList(names);
+        render(names[0]);
+      } catch (err) {
+        console.error(err);
+        app.innerHTML = '로드 실패<br><pre style="white-space:pre-wrap;word-break:break-all;">'
+                        + String(err) + '</pre>';
       }
-
-      window.__ALL = data.sheets;
-      const names = Object.keys(window.__ALL || {});
-      if (!names.length) { app.textContent = '데이터 없음'; return; }
-
-      fillSheetList(names);
-      render(names[0]);
-    } catch (err) {
-      console.error(err);
-      app.innerHTML =
-        '로드 실패<br><pre style="white-space:pre-wrap;word-break:break-all;">' +
-        String(err) +
-        '</pre>';
     }
-  }
 
-  function fillSheetList(names) {
-    const sel = document.getElementById('sheetSelect');
-    sel.innerHTML = '';
-    names.forEach(n => {
-      const opt = document.createElement('option');
-      opt.value = n; opt.textContent = n;
-      sel.appendChild(opt);
+    function fillSheetList(names){
+      const sel = document.getElementById('sheetSelect');
+      sel.innerHTML = '';
+      names.forEach(n => {
+        const opt = document.createElement('option');
+        opt.value = n; opt.textContent = n;
+        sel.appendChild(opt);
+      });
+      sel.onchange = () => render(sel.value);
+    }
+
+    function render(sheetName){
+      const box = document.getElementById('app');
+      const obj = window.__ALL[sheetName];
+      if (!obj) { box.textContent = '시트 없음'; return; }
+
+      const values = obj.values || [];
+      if (!values.length) { box.textContent = '데이터 없음'; return; }
+
+      let html = `<div class="sheet-title">${sheetName}</div><div style="overflow:auto"><table>`;
+      html += '<thead><tr>' + (values[0] || []).map(v => `<th>${esc(v)}</th>`).join('') + '</tr></thead>';
+      html += '<tbody>';
+      for (let r = 1; r < values.length; r++) {
+        html += '<tr>' + (values[r] || []).map(v => `<td>${esc(v)}</td>`).join('') + '</tr>';
+      }
+      html += '</tbody></table></div>';
+      box.innerHTML = html;
+    }
+
+    function esc(s){
+      return String(s ?? '').replace(/[&<>"']/g, m => ({
+        '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'
+      }[m]));
+    }
+
+    // ✅ DOM이 준비된 뒤에만 이벤트 바인딩 + 첫 로드
+    document.addEventListener('DOMContentLoaded', () => {
+      const btn = document.getElementById('reloadBtn');
+      if (btn) btn.addEventListener('click', loadAll);
+      loadAll();
     });
-    sel.onchange = () => render(sel.value);
-  }
-
-  function render(sheetName) {
-    const box = document.getElementById('app');
-    const obj = window.__ALL[sheetName];
-    if (!obj) { box.textContent = '시트 없음'; return; }
-
-    const values = obj.values || [];
-    if (!values.length) { box.textContent = '데이터 없음'; return; }
-
-    let html = `<div class="sheet-title">${sheetName}</div><div style="overflow:auto"><table>`;
-    html += '<thead><tr>' + (values[0] || []).map(v => `<th>${esc(v)}</th>`).join('') + '</tr></thead>';
-    html += '<tbody>';
-    for (let r = 1; r < values.length; r++) {
-      html += '<tr>' + (values[r] || []).map(v => `<td>${esc(v)}</td>`).join('') + '</tr>';
-    }
-    html += '</tbody></table></div>';
-    box.innerHTML = html;
-  }
-
-  function esc(s) {
-    return String(s ?? '').replace(/[&<>"']/g, m => ({
-      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
-    }[m]));
-  }
-
-  document.getElementById('reloadBtn').onclick = loadAll;
-  document.addEventListener('DOMContentLoaded', loadAll);
-</script>
+  </script>
+</body>
+</html>
