@@ -1,45 +1,66 @@
 // /api/schedule.js
 export default async function handler(req, res) {
+  const { mode = 'ping', sid = '', diag } = req.query || {};
+  const BASE = process.env.GAS_URL;           // ✅ 반드시 /exec 로 끝나는 웹앱 URL
+  if (!BASE) return res.status(500).json({ ok:false, error:'Missing GAS_URL' });
+
+  // 목적지 URL 구성
+  const u = new URL(BASE);
+  if (mode) u.searchParams.set('mode', mode);
+  if (sid)  u.searchParams.set('sid',  sid);
+
+  // 진단: 실제로 어디로 던지는지 보여주기
+  if (diag === '1') {
+    return res.status(200).json({ ok:true, target: u.toString() });
+  }
+
   try {
-    const base = process.env.GAS_URL; // googleusercontent "echo" 전체 URL
-    if (!base) return res.status(500).json({ ok: false, error: "Missing GAS_URL env" });
+    const resp = await fetch(u.toString(), {
+      method: 'GET',
+      headers: { accept: 'application/json' },
+      cache: 'no-store',
+    });
 
-    // upstream = GAS echo URL (기존 user_content_key, lib 그대로 보존)
-    const upstream = new URL(base);
+    const ct = resp.headers.get('content-type') || '';
+    const text = await resp.text();
 
-    // (A) Vercel가 파싱한 쿼리 반영
-    if (req.query) {
-      for (const [k, v] of Object.entries(req.query)) {
-        upstream.searchParams.set(k, Array.isArray(v) ? v[0] : v);
+    // Apps Script가 에러일 때 HTML 페이지(Drive/“열 수 없습니다”)를 돌려주기도 하므로,
+    // 컨텐츠 타입을 보고 분기한다.
+    if (ct.includes('application/json')) {
+      let data;
+      try {
+        // 혹시 보호문자( )]}') 가 앞에 붙었으면 제거
+        const cleaned = text.replace(/^[)\]\}'\s]+/, '');
+        data = JSON.parse(cleaned);
+      } catch (e) {
+        return res.status(502).json({
+          ok: false,
+          error: 'Upstream JSON parse error',
+          upstreamStatus: resp.status,
+          bodySample: text.slice(0, 500),
+        });
       }
+      // upstream이 200이 아니라도 메시지와 함께 내려보내 주자
+      if (!resp.ok) {
+        return res.status(502).json({
+          ok: false,
+          error: `Upstream ${resp.status}`,
+          data,
+        });
+      }
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      return res.status(200).json(data);
     }
 
-    // (B) 혹시 req.query가 비어오는 경우 대비: req.url에서 직접 추출
-    if (req.url) {
-      const incoming = new URL(req.url, "http://local");
-      incoming.searchParams.forEach((v, k) => upstream.searchParams.set(k, v));
-    }
-
-    // 🔍 진단 모드: 실제로 호출될 GAS URL을 그대로 보여줌(네트워크 호출 안 함)
-    if (upstream.searchParams.get("diag") === "1") {
-      return res.status(200).json({
-        ok: true,
-        target: upstream.toString(),
-        note: "This is the exact URL the proxy would request.",
-      });
-    }
-
-    // 실제 호출
-    const r = await fetch(upstream.toString(), { cache: "no-store" });
-    const text = await r.text();
-
-    // JSON 파싱 (HTML 에러일 수도 있으니 안전하게)
-    let data;
-    try { data = JSON.parse(text); }
-    catch { data = { ok: false, status: r.status, bodySample: text.slice(0, 800) }; }
-
-    res.status(r.ok ? 200 : r.status).json(data);
+    // JSON이 아니면 그대로 샘플 띄워서 원인 보이게
+    return res.status(502).json({
+      ok: false,
+      error: 'Upstream not JSON',
+      upstreamStatus: resp.status,
+      contentType: ct,
+      bodySample: text.slice(0, 800),
+    });
   } catch (err) {
-    res.status(502).json({ ok: false, error: "upstream error", detail: String(err) });
+    return res.status(500).json({ ok:false, error:String(err) });
   }
 }
