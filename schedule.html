@@ -27,70 +27,48 @@
   <div id="app">로딩 중…</div>
 
 <script>
-  /** ▼▼▼ 여기 두 값만 본인 것으로 설정 ▼▼▼ */
-  const GAS_URL  =
-    'https://script.googleusercontent.com/macros/echo?user_content_key=AehSKLjk-4Cnuta5wVtLPTZtlqTLYqMrsQWgNbcv-b_hsYX7Uo3_O-pMMjLiaAOFcIwT9bXnbwxXITpl8gmQ8NvGyYKSeR2loj825MnVAEcpMcqg91ZfAj80zauPhpyIhtFTLWRRsOZkOYsRGm-gEU5K8MpKTiklDrVsr_uDtXhtvGnFiuKYJ3pHB5lcWgXknIjgKQuYX_-3wo1Jqu6WgYyucIkMzoUk1RARWSvbkrJTtvU40U_3IQwO5Fo46j8TWffa7i2ylvDDdfvrlFiuusInthWdMFjIiTo2MlH6gfht&lib=MPRLHm0JtGxGFsiiCTZpoZsX4MtoCVHWl';
+  // ✅ 이 값만 본인 시트로 맞춰주세요
   const SHEET_ID = '17RCw2gBxseB36Ac9kF7zYXZ4qFTaXP7KsAiKY9uPbN4';
-  /** ▲▲▲ 설정 끝 ▲▲▲ */
+  const API = '/api/schedule'; // 우리가 방금 만든 프록시
 
-  // JSONP helper
-  function jsonp(url, cbName, onDone, onError){
-    window[cbName] = function(data){
-      try { onDone(data); }
-      finally {
-        delete window[cbName];
-        const el = document.getElementById(cbName);
-        if (el) el.remove();
-      }
-    };
-    const s = document.createElement('script');
-    s.id = cbName;
-    s.src = url + (url.includes('?') ? '&' : '?') + 'callback=' + cbName;
-    s.onerror = () => onError && onError(new Error('JSONP load error'));
-    document.body.appendChild(s);
+  function buildUrl(base, params) {
+    const u = new URL(base, location.origin);
+    Object.entries(params).forEach(([k,v]) => v !== '' && u.searchParams.set(k, v));
+    return u.toString();
   }
 
-  // 쿼리 자동 연결(? 또는 & 자동 선택)
-  function buildUrl(base, params){
-    const sep = base.includes('?') ? '&' : '?';
-    const qs  = new URLSearchParams(params).toString();
-    return base + sep + qs;
-  }
-
-  // 전체 시트 원본 로드
-  function loadAll(){
+  async function loadAll() {
     const app = document.getElementById('app');
     app.textContent = '로딩 중…';
 
-    // ❗절대 '?'를 직접 이어붙이지 말고 buildUrl 사용
-    const url = buildUrl(GAS_URL, { mode: 'raw', sid: SHEET_ID });
+    try {
+      const url = buildUrl(API, { mode: 'raw', sid: SHEET_ID });
+      const res = await fetch(url, { cache: 'no-store' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.ok) throw new Error(data.error || '로드 실패');
 
-    jsonp(url, '__cbRaw', (data) => {
-      if (!data || !data.ok) { app.textContent = '로드 실패'; return; }
-      window.__ALL = data.sheets;  // { 시트명: { gid, values } }
-
+      window.__ALL = data.sheets;              // { "시트명": { gid, values } }
       const names = Object.keys(window.__ALL);
       fillSheetList(names);
       render(names[0]);
-    }, (err) => {
+    } catch (err) {
       console.error(err);
       app.textContent = '로드 실패';
-    });
+    }
   }
 
-  function fillSheetList(names){
+  function fillSheetList(names) {
     const sel = document.getElementById('sheetSelect');
     sel.innerHTML = '';
     names.forEach(n => {
       const opt = document.createElement('option');
-      opt.value = n;
-      opt.textContent = n;
+      opt.value = n; opt.textContent = n;
       sel.appendChild(opt);
     });
     sel.onchange = () => render(sel.value);
   }
 
-  function render(sheetName){
+  function render(sheetName) {
     const box = document.getElementById('app');
     const obj = window.__ALL[sheetName];
     if (!obj) { box.textContent = '시트 없음'; return; }
@@ -108,9 +86,9 @@
     box.innerHTML = html;
   }
 
-  function esc(s){
+  function esc(s) {
     return String(s ?? '').replace(/[&<>"']/g, m => ({
-      '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
     }[m]));
   }
 
