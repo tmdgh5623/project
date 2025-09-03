@@ -5,69 +5,77 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>월간 스케줄</title>
   <style>
-    /* = 공통 톤: monthly.html과 동일 값 = */
+    /* monthly.html과 동일 톤 */
     body { font-family: Arial, sans-serif; margin: 0; color:#222; background:#fff; }
-    /* 상단 회색 조작 바 */
-    #top-bar {
-      background:#f0f0f0; padding:8px 15px;
-      display:flex; align-items:center; gap:10px; border-bottom:1px solid #ccc;
-    }
-    h1 { font-size:18px; margin:0; }
-    select { padding:5px; font-size:14px; }
-    button.basic { padding:6px 10px; font-size:14px; border:1px solid #ccc; background:#fff; border-radius:4px; cursor:pointer; }
 
-    /* 본문 */
-    .wrap { padding: 14px 15px 28px; }  /* 전체폭(최대폭 제한 없음) */
-    .status { color:#666; margin-bottom:10px; }
-
-    /* 2x2 그리드(간격/테두리 monthly 톤) */
-    .grid {
-      display:grid; grid-template-columns: 1fr 1fr; grid-template-rows: auto auto;
-      gap: 12px;
+    /* 상단 공용 네비(기존 페이지와 동일) */
+    .topnav{
+      background:#2c3e50; color:#fff; padding:10px;
+      display:flex; justify-content:flex-end; gap:10px;
     }
-    .card {
+    .topnav button{
+      background:#fff; color:#000; border:none; border-radius:4px;
+      padding:6px 12px; cursor:pointer;
+    }
+
+    /* 상단 회색 바(월 선택/메타/버튼) */
+    #top-bar{
+      background:#f0f0f0; padding:8px 15px; display:flex; align-items:center; gap:10px;
+      border-bottom:1px solid #ccc;
+      position:sticky; top:0; z-index:10; /* 스크롤시 고정 */
+    }
+    h1{ font-size:18px; margin:0; }
+    select{ padding:5px; font-size:14px; }
+    .basic{ padding:6px 10px; font-size:14px; border:1px solid #ccc; background:#fff; border-radius:4px; cursor:pointer; }
+    #meta{ color:#666; font-size:12px; }
+    #meta.loading{ color:#333; font-weight:600; } /* 로딩일 때 강조 */
+
+    .wrap{ padding:14px 15px 28px; }
+
+    .grid{
+      display:grid; grid-template-columns:1fr 1fr; grid-template-rows:auto auto; gap:12px;
+    }
+    .card{
       border:1px solid #ccc; border-radius:0; background:#fff; overflow:hidden;
     }
-    .card header {
+    .card header{
       display:flex; justify-content:space-between; align-items:center;
       background:#f2f2f2; border-bottom:1px solid #ccc; padding:8px 10px;
     }
-    .card header h2 { margin:0; font-size:16px; font-weight:600; }
-    .subtle { color:#666; font-size:12px; }
+    .card header h2{ margin:0; font-size:16px; font-weight:600; }
 
-    .table-wrap { overflow:auto; }
-    table { border-collapse: collapse; width:100%; table-layout: fixed; }
-    td {
+    .table-wrap{ overflow:auto; }
+    table{ border-collapse:collapse; width:100%; table-layout:fixed; }
+    td{
       border:1px solid #ccc; background:#fff;
       padding:4px 6px; font-size:12px; line-height:1.2; vertical-align:top; word-break:break-word;
     }
 
-    @media (max-width: 980px) {
-      .grid { grid-template-columns: 1fr; grid-template-rows: auto auto auto auto; }
+    @media (max-width:980px){
+      .grid{ grid-template-columns:1fr; grid-template-rows:auto auto auto auto; }
     }
   </style>
 </head>
 <body>
-  <!-- ✅ 상단 네비(기존 페이지와 동일한 인라인 스타일) -->
-  <div style="background:#2c3e50; color:white; padding:10px; display:flex; justify-content:flex-end; gap:10px;">
-    <button onclick="location.href='index.html'"   style="background:white; color:black; padding:6px 12px; border:none; border-radius:4px; cursor:pointer;">홈</button>
-    <button onclick="location.href='monthly.html'" style="background:white; color:black; padding:6px 12px; border:none; border-radius:4px; cursor:pointer;">월별 대상처 리스트</button>
-    <button onclick="location.href='map.html'"     style="background:white; color:black; padding:6px 12px; border:none; border-radius:4px; cursor:pointer;">지도 보기</button>
-    <button onclick="location.href='schedule.html'"style="background:white; color:black; padding:6px 12px; border:none; border-radius:4px; cursor:pointer;">스케줄</button>
+  <!-- 상단 네비 -->
+  <div class="topnav">
+    <button onclick="location.href='index.html'">홈</button>
+    <button onclick="location.href='monthly.html'">월별 대상처 리스트</button>
+    <button onclick="location.href='map.html'">지도 보기</button>
+    <button onclick="location.href='schedule.html'">스케줄</button>
   </div>
 
-  <!-- ✅ 상단 회색바도 monthly.html과 동일 구조/스타일 -->
+  <!-- 상단 회색 바 -->
   <div id="top-bar">
     <h1>월간 스케줄</h1>
     <label for="sheetSelect"><strong>월 선택:</strong></label>
     <select id="sheetSelect"></select>
     <button id="refreshBtn" class="basic">새로고침</button>
-    <span id="meta" class="subtle"></span>
+    <span id="meta"></span>
   </div>
 
   <div class="wrap">
-    <div id="status" class="status">로드 중…</div>
-    <div id="grid" class="grid" hidden></div>
+    <div id="grid" class="grid"></div>
   </div>
 
   <script>
@@ -79,66 +87,126 @@
     const $select  = document.getElementById('sheetSelect');
     const $refresh = document.getElementById('refreshBtn');
     const $grid    = document.getElementById('grid');
-    const $status  = document.getElementById('status');
     const $meta    = document.getElementById('meta');
 
-    init().catch(showError);
+    // ✅ 시트별 캐시(세션 동안 유지)
+    const cache = new Map();
+    // ✅ 빠른 전환 시 이전 요청 취소
+    let currentController = null;
 
-    async function init() {
+    init().catch(e => showMeta(`오류: ${e && e.message ? e.message : e}`));
+
+    async function init(){
       const sheets = await fetchJson(api('mode=sheets')).then(r => r.sheets || []);
+      // 드롭다운 구성
       $select.innerHTML = sheets.map(n => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join('');
-      const use = initialSheet && sheets.includes(initialSheet) ? initialSheet : (sheets[0] || '1월');
-      $select.value = use;
-      await renderMonth(use);
 
+      // 현재 월 자동 선택(쿼리 있으면 그 값 우선)
+      const use = initialSheet && sheets.includes(initialSheet) ? initialSheet : guessCurrentSheet(sheets);
+      $select.value = use;
+
+      // 첫 렌더
+      renderMonth(use);
+
+      // 이벤트
       $select.addEventListener('change', () => renderMonth($select.value));
       $refresh.addEventListener('click',  () => renderMonth($select.value));
     }
 
-    async function renderMonth(sheetName) {
-      try {
-        setLoading(true, `${sheetName} 불러오는 중…`);
-        const data = await fetchJson(api(new URLSearchParams({ mode:'month', sheet:sheetName }).toString()));
-        if (!data.ok) throw new Error(data.error || 'API 오류');
+    function guessCurrentSheet(sheets){
+      if (!sheets.length) return '1월';
+      const nowSeoul = new Date(new Date().toLocaleString('en-US', { timeZone:'Asia/Seoul' }));
+      const m = nowSeoul.getMonth() + 1;
+      const yy = String(nowSeoul.getFullYear()).slice(2);
+      const exact = [`${m}월`, `${yy}년${m}월`];
 
-        $meta.textContent = `시트: ${data.sheet} · 영역 ${data.meta.cols}열 × ${data.meta.rows}행 (상/하 ${data.meta.rowsPerHalf}행)`;
-        $grid.innerHTML = '';
-
-        for (const team of data.teams) $grid.appendChild(renderTeamCard(team));
-        setLoading(false);
-      } catch(e) { showError(e); }
+      for (const cand of exact){
+        const hit = sheets.find(s => s === cand);
+        if (hit) return hit;
+      }
+      for (const cand of exact){
+        const hit = sheets.find(s => s.includes(cand));
+        if (hit) return hit;
+      }
+      const loose = sheets.find(s => s.includes(`${m}월`));
+      return loose || sheets[0];
     }
 
-    function renderTeamCard(team) {
+    // 핵심: 캐시 먼저, 백그라운드 갱신(스테일-와일-리밸리데이트)
+    async function renderMonth(sheetName){
+      // 이전 요청 취소
+      if (currentController) currentController.abort();
+      currentController = new AbortController();
+
+      // 1) 캐시가 있으면 즉시 표시
+      const cached = cache.get(sheetName);
+      if (cached){
+        paint(cached);
+        showMeta(`"${sheetName}" 최신 내용 확인 중…`, true); // 상단에서 로딩 표시(굵게)
+      }else{
+        showMeta(`${sheetName} 불러오는 중…`, true);
+      }
+
+      // 2) 최신 데이터 가져와서 갱신
+      try{
+        const data = await fetchJson(
+          api(new URLSearchParams({ mode:'month', sheet:sheetName }).toString()),
+          currentController.signal
+        );
+        if (!data.ok) throw new Error(data.error || 'API 오류');
+        cache.set(sheetName, data);
+        paint(data);
+        showMeta(`시트: ${data.sheet} · 영역 ${data.meta.cols}열 × ${data.meta.rows}행 (상/하 ${data.meta.rowsPerHalf}행)`, false);
+      }catch(e){
+        if (e.name === 'AbortError') return; // 사용자가 월 전환
+        showMeta(`오류: ${e && e.message ? e.message : e}`, true);
+      }finally{
+        currentController = null;
+      }
+    }
+
+    function paint(data){
+      $grid.innerHTML = '';
+      for (const team of data.teams){
+        $grid.appendChild(renderTeamCard(team));
+      }
+    }
+
+    function renderTeamCard(team){
       const card = document.createElement('section');
       card.className = 'card';
 
       const head = document.createElement('header');
-      const h2 = document.createElement('h2'); h2.textContent = team.title || `팀 ${team.id}`;
-      const sz = document.createElement('div'); sz.className='subtle'; sz.textContent = `${team.cols}열 × ${team.rows}행`;
-      head.append(h2, sz); card.appendChild(head);
+      const h2   = document.createElement('h2'); h2.textContent = team.title || `팀 ${team.id}`;
+      const sz   = document.createElement('div'); sz.style.color='#666'; sz.style.fontSize='12px';
+      sz.textContent = `${team.cols}열 × ${team.rows}행`;
+      head.append(h2, sz);
+      card.appendChild(head);
 
-      const wrap = document.createElement('div'); wrap.className = 'table-wrap';
+      const wrap  = document.createElement('div'); wrap.className = 'table-wrap';
       const table = document.createElement('table');
 
-      // 병합 셀을 그리드에 배치
+      // 병합 셀 배치용 그리드
       const grid = Array.from({length: team.rows}, () => Array(team.cols).fill(null));
-      for (const cell of team.cells) {
+      for (const cell of team.cells){
         const r0 = cell.r - 1, c0 = cell.c - 1;
         grid[r0][c0] = cell;
         const rs = cell.rowspan || 1, cs = cell.colspan || 1;
-        for (let r = r0; r < r0 + rs; r++) for (let c = c0; c < c0 + cs; c++) {
-          if (r===r0 && c===c0) continue; grid[r][c] = 'skip';
+        for (let r=r0; r<r0+rs; r++){
+          for (let c=c0; c<c0+cs; c++){
+            if (r===r0 && c===c0) continue;
+            grid[r][c] = 'skip';
+          }
         }
       }
 
-      for (let r = 0; r < team.rows; r++) {
+      for (let r=0; r<team.rows; r++){
         const tr = document.createElement('tr');
-        for (let c = 0; c < team.cols; c++) {
+        for (let c=0; c<team.cols; c++){
           const cell = grid[r][c];
           if (cell === 'skip') continue;
           const td = document.createElement('td');
-          if (cell && cell.text != null) {
+          if (cell && cell.text != null){
             if (cell.rowspan && cell.rowspan > 1) td.rowSpan = cell.rowspan;
             if (cell.colspan && cell.colspan > 1) td.colSpan = cell.colspan;
             if (cell.bg) td.style.backgroundColor = cell.bg;
@@ -154,19 +222,18 @@
       return card;
     }
 
-    async function fetchJson(url) {
-      const r = await fetch(url, { cache:'no-store' });
+    function showMeta(text, isLoading){
+      $meta.classList.toggle('loading', !!isLoading);
+      $meta.textContent = text || '';
+    }
+
+    async function fetchJson(url, signal){
+      const r = await fetch(url, { cache:'no-store', signal });
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       return r.json();
     }
 
-    function setLoading(on, msg) {
-      if (on) { $status.hidden=false; $status.textContent=msg||'로드 중…'; $grid.hidden=true; }
-      else    { $status.hidden=true;  $grid.hidden=false; }
-    }
-    function showError(e) { console.error(e); setLoading(true, `오류: ${e && e.message ? e.message : e}`); }
-
-    function escapeHtml(s) {
+    function escapeHtml(s){
       return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
     }
   </script>
