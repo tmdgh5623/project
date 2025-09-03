@@ -2,132 +2,214 @@
 <html lang="ko">
 <head>
   <meta charset="utf-8" />
-  <title>월간 스케줄(모든 시트 원본 로드)</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>월간 스케줄</title>
   <style>
-    body { font-family: Arial, sans-serif; margin:16px; }
-    #ctrls { margin-bottom:12px; display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
-    table { border-collapse: collapse; width: 100%; }
-    th, td { border:1px solid #ddd; padding:6px; font-size:13px; vertical-align:top; }
-    th { background:#f5f5f5; }
-    select, button { padding:6px 8px; }
-    .sheet-title { font-weight:bold; margin: 16px 0 8px; }
-    .muted { color:#777; font-size:12px; }
-    pre.err { white-space:pre-wrap; word-break:break-all; background:#fff7f7; border:1px solid #f1c0c0; padding:8px; border-radius:6px; }
+    :root {
+      --gap: 16px;
+      --card-radius: 14px;
+      --border: #ddd;
+      --text: #222;
+      --muted: #6b7280;
+    }
+    html, body { margin:0; padding:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, 'Noto Sans KR', sans-serif; color:var(--text); }
+    .wrap { max-width: 1280px; margin: 24px auto; padding: 0 16px; }
+    header { display:flex; gap:12px; align-items:center; flex-wrap:wrap; margin-bottom: 12px; }
+    header h1 { font-size: 20px; margin:0; }
+    select, button {
+      border:1px solid var(--border); border-radius:10px; padding:8px 12px; background:#fff; font-size:14px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      grid-template-rows: auto auto;
+      gap: var(--gap);
+    }
+    .card {
+      border:1px solid var(--border);
+      border-radius: var(--card-radius);
+      overflow: hidden;
+      background:#fff;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+    }
+    .card header {
+      display:flex; align-items:center; justify-content:space-between;
+      padding:10px 12px; border-bottom:1px solid var(--border); background:#fafafa;
+    }
+    .card header h2 { font-size:16px; margin:0; font-weight:600; }
+    .table-wrap { overflow:auto; }
+    table { border-collapse: collapse; width:100%; table-layout: fixed; }
+    td {
+      border: 1px solid #e5e7eb;
+      padding: 4px 6px;
+      vertical-align: top;
+      word-break: break-word;
+      font-size: 12px;
+      line-height: 1.2;
+    }
+    .muted { color: var(--muted); }
+    .toolbar {
+      display:flex; gap:8px; align-items:center; margin: 6px 0 16px;
+    }
+    .loading { padding:16px; }
+    @media (max-width: 980px) {
+      .grid { grid-template-columns: 1fr; grid-template-rows: auto auto auto auto; }
+    }
   </style>
 </head>
 <body>
-  <h1>월간 스케줄(모든 시트 원본 로드)</h1>
+  <div class="wrap">
+    <header>
+      <h1>월간 스케줄</h1>
+      <div class="toolbar">
+        <label class="muted">월 선택:</label>
+        <select id="sheetSelect"></select>
+        <button id="refreshBtn">새로고침</button>
+      </div>
+      <div class="muted" id="meta"></div>
+    </header>
 
-  <div id="ctrls">
-    <label>시트 선택:
-      <select id="sheetSelect"></select>
-    </label>
-    <button id="reloadBtn" type="button">새로고침</button>
-    <span class="muted" id="status"></span>
+    <div id="status" class="loading muted">로드 중…</div>
+    <div id="grid" class="grid" hidden></div>
   </div>
 
-  <div id="app">로딩 중…</div>
-
   <script>
-    /* ▼ 필요 값 (시트 ID만 바꿔 쓰면 됩니다) */
-    const SHEET_ID = '17RCw2gBxseB36Ac9kF7zYXZ4qFTaXP7KsAiKY9uPbN4';
-    const API      = '/api/schedule'; // 서버 사이드 프록시
+    const api = (qs) => `/api/schedule${qs ? ('?' + qs) : ''}`;
 
-    function esc(s){
-      return String(s ?? '').replace(/[&<>"']/g, m => (
-        { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[m]
-      ));
+    const qs = new URLSearchParams(location.search);
+    const initialSheet = qs.get('sheet') || null;
+
+    const $select = document.getElementById('sheetSelect');
+    const $refresh = document.getElementById('refreshBtn');
+    const $grid = document.getElementById('grid');
+    const $status = document.getElementById('status');
+    const $meta = document.getElementById('meta');
+
+    init().catch(err => showError(err));
+
+    async function init() {
+      // 1) 시트 목록
+      const sheets = await fetchJson(api('mode=sheets')).then(r => r.sheets || []);
+      // 드롭다운 채우기
+      $select.innerHTML = sheets.map(n => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join('');
+      // 기본 선택(쿼리 or 첫 번째)
+      const use = initialSheet && sheets.includes(initialSheet) ? initialSheet : (sheets[0] || '1월');
+      $select.value = use;
+      // 2) 첫 렌더
+      await renderMonth(use);
+
+      // UI 이벤트
+      $select.addEventListener('change', () => renderMonth($select.value));
+      $refresh.addEventListener('click', () => renderMonth($select.value));
     }
-    function buildUrl(base, params){
-      const u = new URL(base, location.origin);
-      Object.entries(params).forEach(([k,v]) => v !== '' && v != null && u.searchParams.set(k, v));
-      return u.toString();
-    }
-    function setStatus(text){ document.getElementById('status').textContent = text || ''; }
 
-    async function loadAll(){
-      const app = document.getElementById('app');
-      app.textContent = '로딩 중…';
-      setStatus('불러오는 중…');
-
+    async function renderMonth(sheetName) {
       try {
-        const url = buildUrl(API, { mode: 'raw', sid: SHEET_ID });
-        const res = await fetch(url, { cache: 'no-store' });
+        setLoading(true, `${sheetName} 불러오는 중…`);
+        const url = api(new URLSearchParams({ mode:'month', sheet:sheetName }).toString());
+        const data = await fetchJson(url);
+        if (!data.ok) throw new Error(data.error || 'API 오류');
 
-        if (!res.ok) {
-          // ❗에러일 때 원문 본문을 그대로 보여줘서 원인을 바로 확인
-          const body = await res.text();
-          app.innerHTML =
-            `로드 실패<br><b>HTTP ${res.status} ${res.statusText}</b>` +
-            `<br><pre class="err">${esc(body)}</pre>`;
-          setStatus('실패');
-          return;
+        $meta.textContent = `시트: ${data.sheet} · 영역 ${data.meta.cols}열 × ${data.meta.rows}행 (상하 ${data.meta.rowsPerHalf}행)`;
+        $grid.innerHTML = ''; // reset
+
+        // 팀 1~4 렌더
+        for (const team of data.teams) {
+          $grid.appendChild(renderTeamCard(team));
         }
 
-        // 정상 응답(JSON)
-        const data = await res.json();
-        if (!data || data.ok !== true) {
-          app.innerHTML = '로드 실패<br><pre class="err">' + esc(JSON.stringify(data, null, 2)) + '</pre>';
-          setStatus('실패');
-          return;
-        }
-        if (!data.sheets || typeof data.sheets !== 'object') {
-          app.innerHTML = '로드 실패<br><pre class="err">유효한 sheets 데이터가 없습니다.</pre>';
-          setStatus('실패');
-          return;
-        }
-
-        window.__ALL = data.sheets;  // { "시트명": { gid, values } }
-        const names = Object.keys(window.__ALL || {});
-        if (!names.length) {
-          app.textContent = '데이터 없음';
-          setStatus('0개 시트');
-          return;
-        }
-
-        fillSheetList(names);
-        render(names[0]);
-        setStatus(`${names.length}개 시트`);
-      } catch (err) {
-        app.innerHTML = '로드 실패<br><pre class="err">' + esc(String(err)) + '</pre>';
-        setStatus('실패');
+        setLoading(false);
+      } catch (e) {
+        showError(e);
       }
     }
 
-    function fillSheetList(names){
-      const sel = document.getElementById('sheetSelect');
-      sel.innerHTML = '';
-      names.forEach(n => {
-        const opt = document.createElement('option');
-        opt.value = n; opt.textContent = n;
-        sel.appendChild(opt);
-      });
-      sel.onchange = () => render(sel.value);
-    }
+    function renderTeamCard(team) {
+      const card = document.createElement('section');
+      card.className = 'card';
 
-    function render(sheetName){
-      const box = document.getElementById('app');
-      const obj = window.__ALL?.[sheetName];
-      if (!obj) { box.textContent = '시트 없음'; return; }
+      // 헤더
+      const head = document.createElement('header');
+      const h2 = document.createElement('h2');
+      h2.textContent = team.title || `팀 ${team.id}`;
+      head.appendChild(h2);
+      const sz = document.createElement('div');
+      sz.className = 'muted';
+      sz.textContent = `${team.cols}열 × ${team.rows}행`;
+      head.appendChild(sz);
+      card.appendChild(head);
 
-      const values = obj.values || [];
-      if (!values.length) { box.textContent = '데이터 없음'; return; }
+      // 표 생성
+      const wrap = document.createElement('div');
+      wrap.className = 'table-wrap';
+      const table = document.createElement('table');
 
-      let html = `<div class="sheet-title">${esc(sheetName)}</div><div style="overflow:auto"><table>`;
-      html += '<thead><tr>' + (values[0] || []).map(v => `<th>${esc(v)}</th>`).join('') + '</tr></thead>';
-      html += '<tbody>';
-      for (let r = 1; r < values.length; r++) {
-        html += '<tr>' + (values[r] || []).map(v => `<td>${esc(v)}</td>`).join('') + '</tr>';
+      // 셀 배치용 그리드 (null=빈칸, 'skip'=병합 내부)
+      const grid = Array.from({length: team.rows}, () => Array(team.cols).fill(null));
+      for (const cell of team.cells) {
+        const r0 = cell.r - 1, c0 = cell.c - 1;
+        grid[r0][c0] = cell;
+        const rs = cell.rowspan || 1, cs = cell.colspan || 1;
+        for (let r = r0; r < r0 + rs; r++) {
+          for (let c = c0; c < c0 + cs; c++) {
+            if (r === r0 && c === c0) continue;
+            grid[r][c] = 'skip';
+          }
+        }
       }
-      html += '</tbody></table></div>';
-      box.innerHTML = html;
+
+      // 표 렌더링
+      for (let r = 0; r < team.rows; r++) {
+        const tr = document.createElement('tr');
+        for (let c = 0; c < team.cols; c++) {
+          const cell = grid[r][c];
+          if (cell === 'skip') continue; // 병합 내부는 출력 안 함
+          const td = document.createElement('td');
+          if (cell && cell.text != null) {
+            if (cell.rowspan && cell.rowspan > 1) td.rowSpan = cell.rowspan;
+            if (cell.colspan && cell.colspan > 1) td.colSpan = cell.colspan;
+            if (cell.bg) td.style.backgroundColor = cell.bg;
+            td.textContent = cell.text; // 그대로 표시
+          } else {
+            td.textContent = ''; // 빈 칸
+          }
+          tr.appendChild(td);
+        }
+        table.appendChild(tr);
+      }
+
+      wrap.appendChild(table);
+      card.appendChild(wrap);
+      return card;
     }
 
-    document.addEventListener('DOMContentLoaded', () => {
-      document.getElementById('reloadBtn')?.addEventListener('click', loadAll);
-      loadAll();
-    });
+    async function fetchJson(url) {
+      const r = await fetch(url, { cache: 'no-store' });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      return r.json();
+    }
+
+    function setLoading(on, msg) {
+      if (on) {
+        $status.hidden = false;
+        $status.textContent = msg || '로드 중…';
+        $grid.hidden = true;
+      } else {
+        $status.hidden = true;
+        $grid.hidden = false;
+      }
+    }
+
+    function showError(e) {
+      console.error(e);
+      $status.hidden = false;
+      $grid.hidden = true;
+      $status.textContent = `오류: ${e && e.message ? e.message : e}`;
+    }
+
+    function escapeHtml(s) {
+      return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+    }
   </script>
 </body>
 </html>
