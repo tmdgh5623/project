@@ -6,38 +6,65 @@
 <title>월간 스케줄</title>
 <style>
   /* 문서 스크롤 제거, 내부 컨테이너만 스크롤 */
-  html, body { height:100%; margin:0; overflow:hidden; }
+  html, body { height:100%; margin:0; overflow:hidden; font-family:system-ui,-apple-system,Segoe UI,Roboto,'Noto Sans KR',sans-serif; color:#222; }
 
-  /* 공통 네비 (monthly.html과 동일) */
-  .nav {
+  /* 공통 네비(월별 대상처 리스트와 동일 톤) */
+  .nav{
     background:#2c3e50; color:#fff;
-    padding:10px; display:flex; justify-content:flex-end; gap:10px;
+    padding:10px;
+    display:flex; justify-content:flex-end; gap:10px;
     position:sticky; top:0; z-index:1000;
   }
-  .nav button{ background:#fff; color:#000; border:none; border-radius:4px; padding:6px 12px; cursor:pointer; }
+  .nav button{
+    background:#fff; color:#000; border:none; border-radius:4px;
+    padding:6px 12px; cursor:pointer;
+  }
 
-  /* 월간 대상처 리스트 톤의 상단 바 */
+  /* 상단 바(월별 대상처 리스트의 #top-bar 스타일) */
   #top-bar{
     background:#f0f0f0; border-bottom:1px solid #ddd;
-    padding:8px 15px; display:flex; align-items:center; gap:10px;
-    position:sticky; top:0; z-index:900; /* JS로 실제 top 보정 */
+    padding:8px 15px;
+    display:flex; align-items:center; gap:10px;
+    position:sticky; top:0; z-index:900; /* JS에서 top 값 보정 */
   }
   #top-bar h1{ font-size:18px; margin:0; }
   #top-bar select, #top-bar button{
-    padding:5px 10px; font-size:14px; border:1px solid #dcdcdc; border-radius:8px; background:#fff;
+    padding:5px 10px; font-size:14px;
+    border:1px solid #dcdcdc; border-radius:8px; background:#fff;
   }
   #status{ color:#666; font-size:13px; margin-left:4px; }
 
   /* 이 영역만 스크롤 */
-  .page{ overflow:auto; padding:12px 14px 16px; box-sizing:border-box; height:calc(100vh - 96px); }
+  .page{
+    overflow:auto;
+    padding:12px 14px 16px;
+    box-sizing:border-box;
+    height:calc(100vh - 96px); /* 실제 값은 JS가 재계산 */
+  }
 
-  /* 전폭 2열 */
+  /* 2열 전폭 그리드 */
   .grid{ display:grid; grid-template-columns:1fr 1fr; gap:14px; }
   @media (max-width:980px){ .grid{ grid-template-columns:1fr; } }
 
   /* 카드/표 */
-  .card{ border:1px solid #e5e7eb; border-radius:12px; overflow:hidden; background:#fff; box-shadow:0 1px 4px rgba(0,0,0,.04); }
-  .teambar{ background:#f0f0f0; border-bottom:1px solid #e6e6e6; color:#444; font-size:12px; padding:6px 10px; }
+  .card{
+    border:1px solid #e5e7eb;
+    border-radius:12px;
+    overflow:hidden;
+    background:#fff;
+    box-shadow:0 1px 4px rgba(0,0,0,.04);
+  }
+  /* 팀 라벨(강조) */
+  .teambar{
+    background:#e9eef5;
+    border-bottom:1px solid #dbe2ea;
+    color:#1f2937;
+    font-size:12px;
+    font-weight:700;
+    letter-spacing:.2px;
+    padding:8px 12px;
+  }
+
   .table-wrap{ overflow:auto; }
   table{ border-collapse:collapse; width:100%; table-layout:fixed; }
   td{
@@ -51,40 +78,44 @@
 </style>
 </head>
 <body>
-<div class="nav" id="nav">
-  <button onclick="location.href='index.html'">홈</button>
-  <button onclick="location.href='monthly.html'">월별 대상처 리스트</button>
-  <button onclick="location.href='map.html'">지도 보기</button>
-  <button onclick="location.href='schedule.html'">스케줄</button>
-</div>
+  <!-- 공통 네비 -->
+  <div class="nav" id="nav">
+    <button onclick="location.href='index.html'">홈</button>
+    <button onclick="location.href='monthly.html'">월별 대상처 리스트</button>
+    <button onclick="location.href='map.html'">지도 보기</button>
+    <button onclick="location.href='schedule.html'">스케줄</button>
+  </div>
 
-<div id="top-bar">
-  <h1>월간 스케줄</h1>
-  <label for="sheetSelect"><strong>월 선택:</strong></label>
-  <select id="sheetSelect"></select>
-  <button id="refreshBtn">새로고침</button>
-  <span id="status"></span>
-</div>
+  <!-- 상단 바 -->
+  <div id="top-bar">
+    <h1>월간 스케줄</h1>
+    <label for="sheetSelect"><strong>월 선택:</strong></label>
+    <select id="sheetSelect"></select>
+    <button id="refreshBtn">새로고침</button>
+    <span id="status"></span>
+  </div>
 
-<div class="page" id="page">
-  <div id="grid" class="grid"></div>
-</div>
+  <!-- 내부 스크롤 영역 -->
+  <div class="page" id="page">
+    <div id="grid" class="grid"></div>
+  </div>
 
 <script>
-  // 네비/툴바 높이에 맞춰 내부 스크롤 높이 계산
+  /* ===== 레이아웃: 바깥 스크롤 제거하고 내부 .page만 스크롤 ===== */
   function relayout(){
     const nav  = document.getElementById('nav');
     const top  = document.getElementById('top-bar');
     const page = document.getElementById('page');
     const navH = nav ? nav.offsetHeight : 0;
     const topH = top ? top.offsetHeight : 0;
-    top.style.top = navH + 'px';
-    page.style.height = `calc(100vh - ${navH + topH}px)`;
+
+    top.style.top = navH + 'px';                               // sticky 기준
+    page.style.height = `calc(100vh - ${navH + topH}px)`;      // 내부 높이
   }
   window.addEventListener('load', relayout);
   window.addEventListener('resize', relayout);
 
-  // API
+  /* ===== 데이터 ===== */
   const api = (qs) => `/api/schedule${qs ? ('?' + qs) : ''}`;
 
   const $select  = document.getElementById('sheetSelect');
@@ -101,9 +132,11 @@
     const sheets = await fetchJson(api('mode=sheets')).then(r => r.sheets || []);
     $select.innerHTML = sheets.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
     $select.value = sheets.includes(initMonth) ? initMonth : (sheets[0] || '1월');
+
     await render($select.value);
+
     $select.addEventListener('change', () => render($select.value));
-    $refresh.addEventListener('click', () => render($select.value));
+    $refresh.addEventListener('click',  () => render($select.value));
   }
 
   async function render(sheetName){
@@ -117,7 +150,7 @@
         $grid.appendChild(renderTeam(team));
       }
       setLoading('');
-      relayout();
+      relayout(); // 렌더 후 높이 재계산
     }catch(e){
       showError(e);
     }
@@ -127,16 +160,17 @@
     const card = document.createElement('section');
     card.className = 'card';
 
-    // 👉 팀 라벨 (요일 상단 위에 한 줄)
+    // 팀 라벨(요일 위 한 줄)
     const bar = document.createElement('div');
     bar.className = 'teambar';
     bar.textContent = `${team.id}팀`;
     card.appendChild(bar);
 
-    const wrap = document.createElement('div');
+    const wrap  = document.createElement('div');
     wrap.className = 'table-wrap';
     const table = document.createElement('table');
 
+    // 그리드 구성 (null=빈칸, 'skip'=병합 내부)
     const grid = Array.from({length: team.rows}, () => Array(team.cols).fill(null));
     for(const cell of team.cells){
       const r0 = cell.r - 1, c0 = cell.c - 1;
@@ -150,20 +184,22 @@
       }
     }
 
+    // 표 렌더링
     for(let r=0; r<team.rows; r++){
       const tr = document.createElement('tr');
       for(let c=0; c<team.cols; c++){
         const cell = grid[r][c];
         if(cell === 'skip') continue;
         const td = document.createElement('td');
+
         if(cell){
           if(cell.rowspan > 1) td.rowSpan = cell.rowspan;
           if(cell.colspan > 1) td.colSpan = cell.colspan;
-          if(cell.bg) td.style.backgroundColor = cell.bg;
-          if(cell.html){             // 🔸 부분 글자색 포함 HTML 우선
+          if(cell.bg) td.style.backgroundColor = cell.bg;     // 배경색
+          if(cell.html){                                      // 부분 글자색 포함 HTML 우선
             td.innerHTML = cell.html;
           }else{
-            if(cell.fc) td.style.color = cell.fc; // 셀 단색 폰트
+            if(cell.fc) td.style.color = cell.fc;             // 셀 단색 폰트
             td.textContent = cell.text ?? '';
           }
         }else{
@@ -179,6 +215,7 @@
     return card;
   }
 
+  /* ===== 유틸 ===== */
   async function fetchJson(url){
     const r = await fetch(url, { cache:'no-store' });
     if(!r.ok) throw new Error(`HTTP ${r.status}`);
