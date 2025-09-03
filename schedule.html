@@ -6,12 +6,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <style>
     body { font-family: Arial, sans-serif; margin:16px; }
-    #ctrls { margin-bottom:12px; display:flex; gap:8px; flex-wrap:wrap; }
+    #ctrls { margin-bottom:12px; display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
     table { border-collapse: collapse; width: 100%; }
-    th, td { border:1px solid #ddd; padding:6px; font-size:13px; }
+    th, td { border:1px solid #ddd; padding:6px; font-size:13px; vertical-align:top; }
     th { background:#f5f5f5; }
     select, button { padding:6px 8px; }
     .sheet-title { font-weight:bold; margin: 16px 0 8px; }
+    .muted { color:#777; font-size:12px; }
+    pre.err { white-space:pre-wrap; word-break:break-all; background:#fff7f7; border:1px solid #f1c0c0; padding:8px; border-radius:6px; }
   </style>
 </head>
 <body>
@@ -22,42 +24,74 @@
       <select id="sheetSelect"></select>
     </label>
     <button id="reloadBtn" type="button">새로고침</button>
+    <span class="muted" id="status"></span>
   </div>
 
   <div id="app">로딩 중…</div>
 
   <script>
+    /* ▼ 필요 값 (시트 ID만 바꿔 쓰면 됩니다) */
     const SHEET_ID = '17RCw2gBxseB36Ac9kF7zYXZ4qFTaXP7KsAiKY9uPbN4';
-    const API = '/api/schedule';
+    const API      = '/api/schedule'; // 서버 사이드 프록시
 
+    function esc(s){
+      return String(s ?? '').replace(/[&<>"']/g, m => (
+        { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[m]
+      ));
+    }
     function buildUrl(base, params){
       const u = new URL(base, location.origin);
-      Object.entries(params).forEach(([k,v]) => v !== '' && u.searchParams.set(k, v));
+      Object.entries(params).forEach(([k,v]) => v !== '' && v != null && u.searchParams.set(k, v));
       return u.toString();
     }
+    function setStatus(text){ document.getElementById('status').textContent = text || ''; }
 
     async function loadAll(){
       const app = document.getElementById('app');
       app.textContent = '로딩 중…';
+      setStatus('불러오는 중…');
+
       try {
         const url = buildUrl(API, { mode: 'raw', sid: SHEET_ID });
         const res = await fetch(url, { cache: 'no-store' });
-        const data = await res.json().catch(() => ({}));
 
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        if (!data || data.ok !== true) throw new Error(data?.error || '서버 응답 오류');
-        if (!data.sheets || typeof data.sheets !== 'object') throw new Error('유효한 sheets 데이터가 없습니다.');
+        if (!res.ok) {
+          // ❗에러일 때 원문 본문을 그대로 보여줘서 원인을 바로 확인
+          const body = await res.text();
+          app.innerHTML =
+            `로드 실패<br><b>HTTP ${res.status} ${res.statusText}</b>` +
+            `<br><pre class="err">${esc(body)}</pre>`;
+          setStatus('실패');
+          return;
+        }
 
-        window.__ALL = data.sheets;
+        // 정상 응답(JSON)
+        const data = await res.json();
+        if (!data || data.ok !== true) {
+          app.innerHTML = '로드 실패<br><pre class="err">' + esc(JSON.stringify(data, null, 2)) + '</pre>';
+          setStatus('실패');
+          return;
+        }
+        if (!data.sheets || typeof data.sheets !== 'object') {
+          app.innerHTML = '로드 실패<br><pre class="err">유효한 sheets 데이터가 없습니다.</pre>';
+          setStatus('실패');
+          return;
+        }
+
+        window.__ALL = data.sheets;  // { "시트명": { gid, values } }
         const names = Object.keys(window.__ALL || {});
-        if (!names.length) { app.textContent = '데이터 없음'; return; }
+        if (!names.length) {
+          app.textContent = '데이터 없음';
+          setStatus('0개 시트');
+          return;
+        }
 
         fillSheetList(names);
         render(names[0]);
+        setStatus(`${names.length}개 시트`);
       } catch (err) {
-        console.error(err);
-        app.innerHTML = '로드 실패<br><pre style="white-space:pre-wrap;word-break:break-all;">'
-                        + String(err) + '</pre>';
+        app.innerHTML = '로드 실패<br><pre class="err">' + esc(String(err)) + '</pre>';
+        setStatus('실패');
       }
     }
 
@@ -74,13 +108,13 @@
 
     function render(sheetName){
       const box = document.getElementById('app');
-      const obj = window.__ALL[sheetName];
+      const obj = window.__ALL?.[sheetName];
       if (!obj) { box.textContent = '시트 없음'; return; }
 
       const values = obj.values || [];
       if (!values.length) { box.textContent = '데이터 없음'; return; }
 
-      let html = `<div class="sheet-title">${sheetName}</div><div style="overflow:auto"><table>`;
+      let html = `<div class="sheet-title">${esc(sheetName)}</div><div style="overflow:auto"><table>`;
       html += '<thead><tr>' + (values[0] || []).map(v => `<th>${esc(v)}</th>`).join('') + '</tr></thead>';
       html += '<tbody>';
       for (let r = 1; r < values.length; r++) {
@@ -90,16 +124,8 @@
       box.innerHTML = html;
     }
 
-    function esc(s){
-      return String(s ?? '').replace(/[&<>"']/g, m => ({
-        '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'
-      }[m]));
-    }
-
-    // ✅ DOM이 준비된 뒤에만 이벤트 바인딩 + 첫 로드
     document.addEventListener('DOMContentLoaded', () => {
-      const btn = document.getElementById('reloadBtn');
-      if (btn) btn.addEventListener('click', loadAll);
+      document.getElementById('reloadBtn')?.addEventListener('click', loadAll);
       loadAll();
     });
   </script>
