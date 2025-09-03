@@ -1,229 +1,236 @@
 <!doctype html>
 <html lang="ko">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>월간 스케줄</title>
-<style>
-  :root {
-    --gap: 16px;
-    --card-radius: 14px;
-    --border: #e5e7eb;
-    --text: #1f2937;
-    --muted: #6b7280;
-    --brand: #2c3e50;
-    --sunday: #d10000;
-    --saturday: #1e40af;
-  }
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>월간 스케줄</title>
+  <style>
+    :root{
+      --gap:12px;
+      --border:#e5e7eb;
+      --text:#222;
+      --muted:#6b7280;
+      --topbar-bg:#0f172a;      /* 기존 페이지들과 톤 맞춤(짙은 남색) */
+      --topbar-pad:8px;
+    }
+    html,body{margin:0;padding:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,'Noto Sans KR',sans-serif;color:var(--text);}
+    /* 상단바: 높이 축소 */
+    .topbar{
+      background:var(--topbar-bg);
+      color:#fff;
+      padding:var(--topbar-pad) 12px;
+    }
+    .topbar-inner{
+      max-width:unset;          /* 좌우 꽉차게 */
+      margin:0 auto;
+      display:flex;
+      align-items:center;
+      gap:8px;
+      flex-wrap:wrap;
+    }
+    .topbar h1{
+      font-size:18px;
+      margin:0 8px 0 0;
+      font-weight:700;
+      letter-spacing:-0.2px;
+    }
+    .toolbar{
+      display:flex;
+      align-items:center;
+      gap:6px;
+    }
+    select,button{
+      border:1px solid var(--border);
+      background:#fff;
+      color:#111;
+      border-radius:8px;
+      padding:6px 10px;         /* 더 낮은 높이 */
+      font-size:14px;
+    }
 
-  html, body { margin:0; padding:0; background:#fff; color:var(--text);
-    font-family: system-ui,-apple-system,Segoe UI,Roboto,'Noto Sans KR',sans-serif; }
+    /* 본문 컨테이너: 좌우 꽉차게 */
+    .wrap{
+      max-width:unset;          /* 제한 해제 */
+      margin:12px auto;
+      padding:0 12px;
+    }
 
-  /* 상단 공통 네비 (기존 페이지와 통일) */
-  .topbar {
-    background: var(--brand); color:#fff; padding:10px 14px;
-    display:flex; justify-content:flex-end; gap:10px; position:sticky; top:0; z-index:50;
-  }
-  .topbar button {
-    background:#fff; color:#000; border:none; border-radius:6px; padding:6px 12px; cursor:pointer;
-  }
+    /* 상태 표시(로딩/오류) — 상단바 오른쪽에 작게 */
+    .status{
+      margin-left:auto;
+      font-size:13px;
+      color:#e5e7eb;
+      opacity:0.9;
+      min-height:18px;
+    }
 
-  /* 컨테이너: 좌우 꽉차게 */
-  .wrap { width:100%; padding: 16px; box-sizing: border-box; }
-  header { display:flex; flex-wrap:wrap; gap:12px; align-items:center; margin-bottom: 10px; }
-  header h1 { font-size:20px; margin:0; }
-  select, button {
-    border:1px solid var(--border); border-radius:10px; padding:8px 12px; background:#fff; font-size:14px;
-  }
-  .toolbar { display:flex; gap:8px; align-items:center; }
+    /* 그리드: 여백을 좁혀 중앙 ‘틈’ 제거 */
+    .grid{
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:var(--gap);
+    }
+    @media (max-width:1020px){
+      .grid{grid-template-columns:1fr;}
+    }
 
-  /* 그리드: 2열, 화면 전체 너비 사용 */
-  .grid {
-    width:100%;
-    display:grid; grid-template-columns: 1fr 1fr; gap: var(--gap);
-    align-items:start;
-  }
-  @media (max-width: 1100px) { .grid { grid-template-columns: 1fr; } }
+    /* 카드: 테두리만, 헤더 없음(요청 사항) */
+    .card{
+      border:1px solid var(--border);
+      border-radius:12px;
+      overflow:hidden;
+      background:#fff;
+    }
 
-  .card {
-    border:1px solid var(--border); border-radius: var(--card-radius); overflow:hidden; background:#fff;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-  }
-  .card header {
-    display:flex; align-items:center; justify-content:space-between;
-    padding:10px 12px; border-bottom:1px solid var(--border); background:#fafafa;
-  }
-  .card header h2 { font-size:16px; margin:0; font-weight:600; }
-  .table-wrap { overflow:auto; }
-  table { width:100%; border-collapse:collapse; table-layout:fixed; }
-  td {
-    border:1px solid var(--border);
-    padding: 4px 6px;
-    vertical-align: top;
-    word-break: break-word;
-    font-size: 12px;
-    line-height: 1.2;
-  }
+    /* 표 */
+    .table-wrap{overflow:auto;}
+    table{width:100%;border-collapse:collapse;table-layout:fixed}
+    td{
+      border:1px solid var(--border);
+      padding:4px 6px;
+      vertical-align:top;
+      word-break:break-word;
+      font-size:12px;
+      line-height:1.2;
+    }
 
-  .status { color: var(--muted); }
-
-  /* 주말 색상 */
-  .sun { color: var(--sunday) !important; }
-  .sat { color: var(--saturday) !important; }
-</style>
+    /* 요일 머리글 줄(일/월/화/…/토) 강조 */
+    .dow-sun{color:#c81e1e;font-weight:700;}
+    .dow-sat{color:#1e40af;font-weight:700;}
+  </style>
 </head>
 <body>
-  <!-- 상단 네비 (기존 페이지와 동일한 버튼 배치) -->
+  <!-- 상단 바(높이 축소) -->
   <div class="topbar">
-    <button onclick="location.href='index.html'">홈</button>
-    <button onclick="location.href='monthly.html'">월별 대상처 리스트</button>
-    <button onclick="location.href='map.html'">지도 보기</button>
-    <button onclick="location.href='schedule.html'">스케줄</button>
-  </div>
-
-  <div class="wrap">
-    <header>
+    <div class="topbar-inner">
       <h1>월간 스케줄</h1>
       <div class="toolbar">
-        <label style="color:var(--muted)">월 선택:</label>
+        <label for="sheetSelect" style="font-size:13px;opacity:.9;">월 선택:</label>
         <select id="sheetSelect"></select>
         <button id="refreshBtn">새로고침</button>
       </div>
-      <div id="headerStatus" class="status"></div>
-    </header>
+      <div id="status" class="status"></div>
+      <div style="margin-left:auto;display:flex;gap:8px;">
+        <button onclick="location.href='index.html'">홈</button>
+        <button onclick="location.href='monthly.html'">월별 대상처 리스트</button>
+        <button onclick="location.href='map.html'">지도 보기</button>
+        <button onclick="location.href='schedule.html'">스케줄</button>
+      </div>
+    </div>
+  </div>
 
+  <div class="wrap">
     <div id="grid" class="grid"></div>
   </div>
 
-<script>
-  // Vercel 프록시(API 라우트) → 백엔드 URL은 환경변수로 들어가 있으니 /api/schedule 사용
-  const api = (qs) => `/api/schedule${qs ? ('?' + qs) : ''}`;
+  <script>
+    // Vercel 프록시 → GAS(API)
+    const api = (qs) => `/api/schedule${qs ? ('?' + qs) : ''}`;
 
-  const $select = document.getElementById('sheetSelect');
-  const $refresh = document.getElementById('refreshBtn');
-  const $grid = document.getElementById('grid');
-  const $hdr = document.getElementById('headerStatus');
+    const $select = document.getElementById('sheetSelect');
+    const $refresh = document.getElementById('refreshBtn');
+    const $grid = document.getElementById('grid');
+    const $status = document.getElementById('status');
 
-  init().catch(err => showError(err));
+    // 초기: 현재 월로 자동 선택
+    const y = new Date().getFullYear();
+    const m = new Date().getMonth() + 1;
+    const currentMonthName = `${m}월`;
 
-  async function init() {
-    // 시트 목록
-    const sheets = await fetchJson(api('mode=sheets')).then(r => r.sheets || []);
+    init().catch(showError);
 
-    // 현재 달 자동 선택 (없는 경우 1월)
-    const m = (new Date().getMonth()+1) + '월';
-    const initial = sheets.includes(m) ? m : (sheets[0] || '1월');
+    async function init(){
+      setStatus('시트 목록 불러오는 중…');
+      const sheets = await fetchJson(api('mode=sheets')).then(r => r.sheets || []);
+      // 드롭다운 채우기
+      $select.innerHTML = sheets.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
+      // 현재월 우선 선택(없으면 첫 시트)
+      $select.value = sheets.includes(currentMonthName) ? currentMonthName : (sheets[0] || '1월');
+      await renderMonth($select.value);
 
-    // 드롭다운 채우기
-    $select.innerHTML = sheets.map(n => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join('');
-    $select.value = initial;
-
-    await renderMonth(initial);
-
-    $select.addEventListener('change', () => renderMonth($select.value));
-    $refresh.addEventListener('click',  () => renderMonth($select.value));
-  }
-
-  async function renderMonth(sheetName) {
-    try {
-      setStatus(`${sheetName} 불러오는 중…`);
-      $grid.innerHTML = '';
-
-      const url = api(new URLSearchParams({ mode:'month', sheet:sheetName }).toString());
-      const data = await fetchJson(url);
-      if (!data.ok) throw new Error(data.error || 'API 오류');
-
-      // 팀 1~4 카드 렌더
-      for (const team of data.teams) {
-        $grid.appendChild(renderTeamCard(team));
-      }
-
-      clearStatus();
-    } catch (e) {
-      showError(e);
+      // 이벤트
+      $select.addEventListener('change', () => renderMonth($select.value));
+      $refresh.addEventListener('click', () => renderMonth($select.value));
     }
-  }
 
-  function renderTeamCard(team) {
-    const card = document.createElement('section');
-    card.className = 'card';
+    async function renderMonth(sheetName){
+      try{
+        setStatus(`${sheetName} 불러오는 중…`);
+        const url = api(new URLSearchParams({mode:'month', sheet:sheetName}).toString());
+        const data = await fetchJson(url);
+        if (!data.ok) throw new Error(data.error || 'API 오류');
 
-    // 헤더
-    const head = document.createElement('header');
-    const h2 = document.createElement('h2');
-    h2.textContent = team.title || `팀 ${team.id}`;
-    head.appendChild(h2);
-    card.appendChild(head);
+        $grid.innerHTML = ''; // reset
+        for (const team of data.teams){
+          $grid.appendChild(renderTeamCard(team));
+        }
+        setStatus(''); // 완료
+      }catch(err){
+        showError(err);
+      }
+    }
 
-    // 표 생성
-    const wrap = document.createElement('div');
-    wrap.className = 'table-wrap';
-    const table = document.createElement('table');
+    /** 카드(헤더 제거 버전) */
+    function renderTeamCard(team){
+      const card = document.createElement('section');
+      card.className = 'card';
 
-    // 셀 배치용 그리드 (null=빈칸, 'skip'=병합 내부)
-    const grid = Array.from({length: team.rows}, () => Array(team.cols).fill(null));
-    for (const cell of team.cells) {
-      const r0 = cell.r - 1, c0 = cell.c - 1;
-      grid[r0][c0] = cell;
-      const rs = cell.rowspan || 1, cs = cell.colspan || 1;
-      for (let r = r0; r < r0 + rs; r++) {
-        for (let c = c0; c < c0 + cs; c++) {
-          if (r === r0 && c === c0) continue;
-          grid[r][c] = 'skip';
+      const wrap = document.createElement('div');
+      wrap.className = 'table-wrap';
+      const table = document.createElement('table');
+
+      // 셀 배치용 그리드
+      const grid = Array.from({length: team.rows}, () => Array(team.cols).fill(null));
+      for (const cell of team.cells){
+        const r0 = cell.r - 1, c0 = cell.c - 1;
+        grid[r0][c0] = cell;
+        const rs = cell.rowspan || 1, cs = cell.colspan || 1;
+        for (let r=r0; r<r0+rs; r++){
+          for (let c=c0; c<c0+cs; c++){
+            if (r===r0 && c===c0) continue;
+            grid[r][c] = 'skip';
+          }
         }
       }
-    }
 
-    // 표 렌더링
-    for (let r = 0; r < team.rows; r++) {
-      const tr = document.createElement('tr');
-      for (let c = 0; c < team.cols; c++) {
-        const cell = grid[r][c];
-        if (cell === 'skip') continue;
-        const td = document.createElement('td');
+      for (let r=0; r<team.rows; r++){
+        const tr = document.createElement('tr');
+        for (let c=0; c<team.cols; c++){
+          const cell = grid[r][c];
+          if (cell === 'skip') continue;
+          const td = document.createElement('td');
 
-        if (cell) {
-          if (cell.rowspan && cell.rowspan > 1) td.rowSpan = cell.rowspan;
-          if (cell.colspan && cell.colspan > 1) td.colSpan = cell.colspan;
-          if (cell.bg) td.style.backgroundColor = cell.bg;
-
-          // 부분 글자색 HTML 우선
-          if (cell.html) td.innerHTML = cell.html;
-          else td.textContent = cell.text || '';
-
-          // 요일 색: "일" 포함(일요일), "토" 포함(토요일) 헤더/표시 셀에 적용
-          const t = String(cell.text || '');
-          if (/[일][요일]|\(Sun\)/.test(t)) td.classList.add('sun');
-          else if (/[토][요일]|\(Sat\)/.test(t)) td.classList.add('sat');
+          if (cell){
+            if (cell.rowspan>1) td.rowSpan = cell.rowspan;
+            if (cell.colspan>1) td.colSpan = cell.colspan;
+            if (cell.bg) td.style.backgroundColor = cell.bg;
+            if (cell.fg) td.style.color = cell.fg;
+            td.textContent = cell.text || '';
+            // 요일 머리글 색상 강조
+            if (cell.text === '일요일(Sun)') td.classList.add('dow-sun');
+            if (cell.text === '토요일(Sat)') td.classList.add('dow-sat');
+          }
+          tr.appendChild(td);
         }
-
-        tr.appendChild(td);
+        table.appendChild(tr);
       }
-      table.appendChild(tr);
+
+      wrap.appendChild(table);
+      card.appendChild(wrap);
+      return card;
     }
 
-    wrap.appendChild(table);
-    card.appendChild(wrap);
-    return card;
-  }
-
-  async function fetchJson(url) {
-    const r = await fetch(url, { cache: 'no-store' });
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    return r.json();
-  }
-
-  function setStatus(msg) { $hdr.textContent = msg; }
-  function clearStatus() { $hdr.textContent = ''; }
-
-  function showError(e) {
-    console.error(e);
-    setStatus(`오류: ${e && e.message ? e.message : e}`);
-  }
-
-  function escapeHtml(s) {
-    return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
-  }
-</script>
+    async function fetchJson(url){
+      const r = await fetch(url, {cache:'no-store'});
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      return r.json();
+    }
+    function setStatus(msg){ $status.textContent = msg || ''; }
+    function showError(e){
+      console.error(e);
+      setStatus(`오류: ${e && e.message ? e.message : e}`);
+    }
+    const esc = (s) => String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+  </script>
 </body>
 </html>
