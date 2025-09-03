@@ -1,23 +1,92 @@
-<script>
-  async function loadAll() {
-    const box = document.getElementById('app');
-    box.textContent = '로딩 중…';
-    try {
-      // 프록시만 사용
-      const r = await fetch('/api/schedule?mode=raw', { cache: 'no-store' });
-      const data = await r.json();
-      if (!data || !data.ok) throw new Error(data && data.error || 'load fail');
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <title>월간 스케줄(모든 시트 원본 로드)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body { font-family: Arial, sans-serif; margin:16px; }
+    #ctrls { margin-bottom:12px; display:flex; gap:8px; flex-wrap:wrap; }
+    table { border-collapse: collapse; width: 100%; }
+    th, td { border:1px solid #ddd; padding:6px; font-size:13px; }
+    th { background:#f5f5f5; }
+    select, button { padding:6px 8px; }
+    .sheet-title { font-weight:bold; margin: 16px 0 8px; }
+  </style>
+</head>
+<body>
+  <h1>월간 스케줄(모든 시트 원본 로드)</h1>
 
-      window.__ALL = data.sheets;                      // 전체 저장
-      fillSheetList(Object.keys(window.__ALL));        // 콤보 채우기
-      render(Object.keys(window.__ALL)[0]);            // 첫 시트 렌더
-    } catch (err) {
-      console.error(err);
-      box.textContent = '로드 실패';
+  <div id="ctrls">
+    <label>시트 선택:
+      <select id="sheetSelect"></select>
+    </label>
+    <button id="reloadBtn" type="button">새로고침</button>
+  </div>
+
+  <div id="app">로딩 중…</div>
+
+  <script>
+    // HTML이 모두 만들어진 뒤 실행되도록 보장
+    window.addEventListener('DOMContentLoaded', () => {
+      const reloadBtn = document.getElementById('reloadBtn');
+      if (reloadBtn) reloadBtn.addEventListener('click', loadAll);
+      loadAll(); // 최초 1회 로드
+    });
+
+    async function loadAll() {
+      const box = document.getElementById('app');
+      box.textContent = '로딩 중…';
+      try {
+        // Vercel 프록시만 사용
+        const r = await fetch('/api/schedule?mode=raw', { cache: 'no-store' });
+        const data = await r.json();
+        if (!data || !data.ok) throw new Error(data && data.error || 'load fail');
+
+        window.__ALL = data.sheets || {};         // 전체 저장
+        const names = Object.keys(window.__ALL);
+        fillSheetList(names);
+        render(names[0]);                         // 첫 시트 렌더
+      } catch (err) {
+        console.error(err);
+        box.textContent = '로드 실패';
+      }
     }
-  }
 
-  // ↓ 이하(escapeHtml, fillSheetList, render 등) 기존 코드 그대로
-  document.getElementById('reloadBtn').onclick = loadAll;
-  document.addEventListener('DOMContentLoaded', loadAll);
-</script>
+    function fillSheetList(names) {
+      const sel = document.getElementById('sheetSelect');
+      sel.innerHTML = '';
+      (names || []).forEach(n => {
+        const opt = document.createElement('option');
+        opt.value = n; opt.textContent = n;
+        sel.appendChild(opt);
+      });
+      sel.onchange = () => render(sel.value);
+    }
+
+    function render(sheetName) {
+      const box = document.getElementById('app');
+      const obj = (window.__ALL || {})[sheetName];
+      if (!obj) { box.textContent = '시트 없음'; return; }
+
+      const values = obj.values || [];
+      if (!values.length) { box.textContent = '데이터 없음'; return; }
+
+      let html = `<div class="sheet-title">${escapeHtml(sheetName)}</div><div style="overflow:auto"><table>`;
+      html += '<thead><tr>' + (values[0]||[]).map(v => `<th>${escapeHtml(v)}</th>`).join('') + '</tr></thead>';
+      html += '<tbody>';
+      for (let r = 1; r < values.length; r++) {
+        html += '<tr>' + (values[r]||[]).map(v => `<td>${escapeHtml(v)}</td>`).join('') + '</tr>';
+      }
+      html += '</tbody></table></div>';
+      box.innerHTML = html;
+    }
+
+    function escapeHtml(s){
+      return String(s ?? '').replace(/[&<>"']/g, m => ({
+        '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+      }[m]));
+    }
+  </script>
+</body>
+</html>
