@@ -1,35 +1,6 @@
-<!doctype html>
-<html lang="ko">
-<head>
-  <meta charset="utf-8" />
-  <title>월간 스케줄(모든 시트 원본 로드)</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <style>
-    body { font-family: Arial, sans-serif; margin:16px; }
-    #ctrls { margin-bottom:12px; display:flex; gap:8px; flex-wrap:wrap; }
-    table { border-collapse: collapse; width: 100%; }
-    th, td { border:1px solid #ddd; padding:6px; font-size:13px; }
-    th { background:#f5f5f5; }
-    select, button { padding:6px 8px; }
-    .sheet-title { font-weight:bold; margin: 16px 0 8px; }
-  </style>
-</head>
-<body>
-  <h1>월간 스케줄(모든 시트 원본 로드)</h1>
-
-  <div id="ctrls">
-    <label>시트 선택:
-      <select id="sheetSelect"></select>
-    </label>
-    <button id="reloadBtn" type="button">새로고침</button>
-  </div>
-
-  <div id="app">로딩 중…</div>
-
 <script>
-  // ✅ 이 값만 본인 시트로 맞춰주세요
   const SHEET_ID = '17RCw2gBxseB36Ac9kF7zYXZ4qFTaXP7KsAiKY9uPbN4';
-  const API = '/api/schedule'; // 우리가 방금 만든 프록시
+  const API = '/api/schedule';
 
   function buildUrl(base, params) {
     const u = new URL(base, location.origin);
@@ -45,15 +16,26 @@
       const url = buildUrl(API, { mode: 'raw', sid: SHEET_ID });
       const res = await fetch(url, { cache: 'no-store' });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data.ok) throw new Error(data.error || '로드 실패');
 
-      window.__ALL = data.sheets;              // { "시트명": { gid, values } }
-      const names = Object.keys(window.__ALL);
+      // ▼▼ 중요: 응답 검증을 강화 ▼▼
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      if (!data || data.ok !== true) throw new Error(data && data.error ? data.error : '서버 응답 오류');
+      if (!data.sheets || typeof data.sheets !== 'object') {
+        throw new Error('유효한 sheets 데이터가 없습니다.');
+      }
+
+      window.__ALL = data.sheets;
+      const names = Object.keys(window.__ALL || {});
+      if (!names.length) { app.textContent = '데이터 없음'; return; }
+
       fillSheetList(names);
       render(names[0]);
     } catch (err) {
       console.error(err);
-      app.textContent = '로드 실패';
+      app.innerHTML =
+        '로드 실패<br><pre style="white-space:pre-wrap;word-break:break-all;">' +
+        String(err) +
+        '</pre>';
     }
   }
 
@@ -95,5 +77,3 @@
   document.getElementById('reloadBtn').onclick = loadAll;
   document.addEventListener('DOMContentLoaded', loadAll);
 </script>
-</body>
-</html>
