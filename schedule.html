@@ -5,62 +5,39 @@
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>월간 스케줄</title>
 <style>
-  /* 바깥(문서) 스크롤 제거 */
+  /* 문서 스크롤 제거, 내부 컨테이너만 스크롤 */
   html, body { height:100%; margin:0; overflow:hidden; }
 
-  /* ===== 공통 네비(월별 대상처 리스트와 동일) ===== */
+  /* 공통 네비 (monthly.html과 동일) */
   .nav {
     background:#2c3e50; color:#fff;
-    padding:10px;
-    display:flex; justify-content:flex-end; gap:10px;
+    padding:10px; display:flex; justify-content:flex-end; gap:10px;
     position:sticky; top:0; z-index:1000;
   }
-  .nav button {
-    background:#fff; color:#000; border:none; border-radius:4px;
-    padding:6px 12px; cursor:pointer;
-  }
+  .nav button{ background:#fff; color:#000; border:none; border-radius:4px; padding:6px 12px; cursor:pointer; }
 
-  /* ===== 상단 툴바(월별 대상처 리스트의 #top-bar 동일) ===== */
+  /* 월간 대상처 리스트 톤의 상단 바 */
   #top-bar{
-    background:#f0f0f0;
-    padding:8px 15px;
-    display:flex; align-items:center; gap:10px;
-    position:sticky; top:0; z-index:900;   /* JS가 실제 top 값으로 덮어씀 */
-    border-bottom:1px solid #ddd;
+    background:#f0f0f0; border-bottom:1px solid #ddd;
+    padding:8px 15px; display:flex; align-items:center; gap:10px;
+    position:sticky; top:0; z-index:900; /* JS로 실제 top 보정 */
   }
   #top-bar h1{ font-size:18px; margin:0; }
   #top-bar select, #top-bar button{
-    padding:5px 10px; font-size:14px;
-    border:1px solid #dcdcdc; border-radius:8px; background:#fff;
+    padding:5px 10px; font-size:14px; border:1px solid #dcdcdc; border-radius:8px; background:#fff;
   }
   #status{ color:#666; font-size:13px; margin-left:4px; }
 
-  /* ===== 컨텐츠 영역: 이 영역만 스크롤 (높이는 JS로 계산) ===== */
-  .page{
-    overflow:auto;
-    padding:12px 14px 16px;
-    box-sizing:border-box;
-    height:calc(100vh - 96px); /* 초기값(임시), JS가 정확히 재설정 */
-  }
+  /* 이 영역만 스크롤 */
+  .page{ overflow:auto; padding:12px 14px 16px; box-sizing:border-box; height:calc(100vh - 96px); }
 
-  /* 2열 그리드 */
-  .grid{
-    display:grid;
-    grid-template-columns:1fr 1fr;
-    gap:14px;
-  }
-  @media (max-width:980px){
-    .grid{ grid-template-columns:1fr; }
-  }
+  /* 전폭 2열 */
+  .grid{ display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+  @media (max-width:980px){ .grid{ grid-template-columns:1fr; } }
 
-  /* 카드 & 표 */
-  .card{
-    border:1px solid #e5e7eb;
-    border-radius:12px;
-    overflow:hidden;
-    background:#fff;
-    box-shadow:0 1px 4px rgba(0,0,0,.04);
-  }
+  /* 카드/표 */
+  .card{ border:1px solid #e5e7eb; border-radius:12px; overflow:hidden; background:#fff; box-shadow:0 1px 4px rgba(0,0,0,.04); }
+  .teambar{ background:#f0f0f0; border-bottom:1px solid #e6e6e6; color:#444; font-size:12px; padding:6px 10px; }
   .table-wrap{ overflow:auto; }
   table{ border-collapse:collapse; width:100%; table-layout:fixed; }
   td{
@@ -74,8 +51,6 @@
 </style>
 </head>
 <body>
-
-<!-- 공통 네비 -->
 <div class="nav" id="nav">
   <button onclick="location.href='index.html'">홈</button>
   <button onclick="location.href='monthly.html'">월별 대상처 리스트</button>
@@ -83,7 +58,6 @@
   <button onclick="location.href='schedule.html'">스케줄</button>
 </div>
 
-<!-- 상단 툴바 -->
 <div id="top-bar">
   <h1>월간 스케줄</h1>
   <label for="sheetSelect"><strong>월 선택:</strong></label>
@@ -92,29 +66,25 @@
   <span id="status"></span>
 </div>
 
-<!-- 이 아래만 스크롤 -->
 <div class="page" id="page">
   <div id="grid" class="grid"></div>
 </div>
 
 <script>
-  // ===== 레이아웃: 네비/툴바 실제 높이로 .page 높이 계산 (바깥 스크롤 제거) =====
+  // 네비/툴바 높이에 맞춰 내부 스크롤 높이 계산
   function relayout(){
-    const nav   = document.getElementById('nav');
-    const top   = document.getElementById('top-bar');
-    const page  = document.getElementById('page');
-    const navH  = nav ? nav.offsetHeight : 0;
-    const topH  = top ? top.offsetHeight : 0;
-
-    // 툴바 sticky 기준을 네비 높이에 맞춤
+    const nav  = document.getElementById('nav');
+    const top  = document.getElementById('top-bar');
+    const page = document.getElementById('page');
+    const navH = nav ? nav.offsetHeight : 0;
+    const topH = top ? top.offsetHeight : 0;
     top.style.top = navH + 'px';
-    // 컨텐츠 영역 높이를 정확히 계산
     page.style.height = `calc(100vh - ${navH + topH}px)`;
   }
   window.addEventListener('load', relayout);
   window.addEventListener('resize', relayout);
 
-  // ====== 데이터 렌더 ======
+  // API
   const api = (qs) => `/api/schedule${qs ? ('?' + qs) : ''}`;
 
   const $select  = document.getElementById('sheetSelect');
@@ -130,10 +100,8 @@
   async function init(){
     const sheets = await fetchJson(api('mode=sheets')).then(r => r.sheets || []);
     $select.innerHTML = sheets.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
-    const use = sheets.includes(initMonth) ? initMonth : (sheets[0] || '1월');
-    $select.value = use;
-
-    await render(use);
+    $select.value = sheets.includes(initMonth) ? initMonth : (sheets[0] || '1월');
+    await render($select.value);
     $select.addEventListener('change', () => render($select.value));
     $refresh.addEventListener('click', () => render($select.value));
   }
@@ -141,24 +109,30 @@
   async function render(sheetName){
     try{
       setLoading(`${sheetName} 불러오는 중…`);
-      const url = api(new URLSearchParams({ mode:'month', sheet: sheetName }).toString());
-      const data = await fetchJson(url);
+      const data = await fetchJson(api(new URLSearchParams({ mode:'month', sheet: sheetName }).toString()));
       if(!data.ok) throw new Error(data.error || 'API 오류');
 
       $grid.innerHTML = '';
       for(const team of data.teams){
-        $grid.appendChild(renderTeamTable(team));
+        $grid.appendChild(renderTeam(team));
       }
       setLoading('');
-      relayout(); // 렌더 후에도 한 번 더(행이 늘면 툴바 높이가 변할 수 있음)
+      relayout();
     }catch(e){
       showError(e);
     }
   }
 
-  function renderTeamTable(team){
+  function renderTeam(team){
     const card = document.createElement('section');
     card.className = 'card';
+
+    // 👉 팀 라벨 (요일 상단 위에 한 줄)
+    const bar = document.createElement('div');
+    bar.className = 'teambar';
+    bar.textContent = `${team.id}팀`;
+    card.appendChild(bar);
+
     const wrap = document.createElement('div');
     wrap.className = 'table-wrap';
     const table = document.createElement('table');
@@ -185,9 +159,13 @@
         if(cell){
           if(cell.rowspan > 1) td.rowSpan = cell.rowspan;
           if(cell.colspan > 1) td.colSpan = cell.colspan;
-          if(cell.bg) td.style.backgroundColor = cell.bg; // 배경색
-          if(cell.fc) td.style.color = cell.fc;           // 글자색
-          td.textContent = cell.text ?? '';
+          if(cell.bg) td.style.backgroundColor = cell.bg;
+          if(cell.html){             // 🔸 부분 글자색 포함 HTML 우선
+            td.innerHTML = cell.html;
+          }else{
+            if(cell.fc) td.style.color = cell.fc; // 셀 단색 폰트
+            td.textContent = cell.text ?? '';
+          }
         }else{
           td.textContent = '';
         }
