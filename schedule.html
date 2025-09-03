@@ -5,10 +5,8 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>월간 스케줄</title>
   <style>
-    /* monthly.html과 동일 톤 */
     body { font-family: Arial, sans-serif; margin: 0; color:#222; background:#fff; }
 
-    /* 상단 공용 네비(기존 페이지와 동일) */
     .topnav{
       background:#2c3e50; color:#fff; padding:10px;
       display:flex; justify-content:flex-end; gap:10px;
@@ -18,17 +16,16 @@
       padding:6px 12px; cursor:pointer;
     }
 
-    /* 상단 회색 바(월 선택/메타/버튼) */
     #top-bar{
       background:#f0f0f0; padding:8px 15px; display:flex; align-items:center; gap:10px;
-      border-bottom:1px solid #ccc;
-      position:sticky; top:0; z-index:10; /* 스크롤시 고정 */
+      border-bottom:1px solid #ccc; position:sticky; top:0; z-index:10;
     }
     h1{ font-size:18px; margin:0; }
     select{ padding:5px; font-size:14px; }
     .basic{ padding:6px 10px; font-size:14px; border:1px solid #ccc; background:#fff; border-radius:4px; cursor:pointer; }
-    #meta{ color:#666; font-size:12px; }
-    #meta.loading{ color:#333; font-weight:600; } /* 로딩일 때 강조 */
+
+    /* 메타 텍스트는 요청대로 숨김 */
+    #meta{ display:none; }
 
     .wrap{ padding:14px 15px 28px; }
 
@@ -89,26 +86,22 @@
     const $grid    = document.getElementById('grid');
     const $meta    = document.getElementById('meta');
 
-    // ✅ 시트별 캐시(세션 동안 유지)
+    // 시트별 캐시
     const cache = new Map();
-    // ✅ 빠른 전환 시 이전 요청 취소
+    // 요청 취소용
     let currentController = null;
 
-    init().catch(e => showMeta(`오류: ${e && e.message ? e.message : e}`));
+    init().catch(()=>{});
 
     async function init(){
       const sheets = await fetchJson(api('mode=sheets')).then(r => r.sheets || []);
-      // 드롭다운 구성
       $select.innerHTML = sheets.map(n => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join('');
 
-      // 현재 월 자동 선택(쿼리 있으면 그 값 우선)
       const use = initialSheet && sheets.includes(initialSheet) ? initialSheet : guessCurrentSheet(sheets);
       $select.value = use;
 
-      // 첫 렌더
       renderMonth(use);
 
-      // 이벤트
       $select.addEventListener('change', () => renderMonth($select.value));
       $refresh.addEventListener('click',  () => renderMonth($select.value));
     }
@@ -119,7 +112,6 @@
       const m = nowSeoul.getMonth() + 1;
       const yy = String(nowSeoul.getFullYear()).slice(2);
       const exact = [`${m}월`, `${yy}년${m}월`];
-
       for (const cand of exact){
         const hit = sheets.find(s => s === cand);
         if (hit) return hit;
@@ -128,26 +120,16 @@
         const hit = sheets.find(s => s.includes(cand));
         if (hit) return hit;
       }
-      const loose = sheets.find(s => s.includes(`${m}월`));
-      return loose || sheets[0];
+      return sheets.find(s => s.includes(`${m}월`)) || sheets[0];
     }
 
-    // 핵심: 캐시 먼저, 백그라운드 갱신(스테일-와일-리밸리데이트)
     async function renderMonth(sheetName){
-      // 이전 요청 취소
       if (currentController) currentController.abort();
       currentController = new AbortController();
 
-      // 1) 캐시가 있으면 즉시 표시
       const cached = cache.get(sheetName);
-      if (cached){
-        paint(cached);
-        showMeta(`"${sheetName}" 최신 내용 확인 중…`, true); // 상단에서 로딩 표시(굵게)
-      }else{
-        showMeta(`${sheetName} 불러오는 중…`, true);
-      }
+      if (cached) paint(cached);
 
-      // 2) 최신 데이터 가져와서 갱신
       try{
         const data = await fetchJson(
           api(new URLSearchParams({ mode:'month', sheet:sheetName }).toString()),
@@ -156,10 +138,8 @@
         if (!data.ok) throw new Error(data.error || 'API 오류');
         cache.set(sheetName, data);
         paint(data);
-        showMeta(`시트: ${data.sheet} · 영역 ${data.meta.cols}열 × ${data.meta.rows}행 (상/하 ${data.meta.rowsPerHalf}행)`, false);
       }catch(e){
-        if (e.name === 'AbortError') return; // 사용자가 월 전환
-        showMeta(`오류: ${e && e.message ? e.message : e}`, true);
+        if (e.name === 'AbortError') return;
       }finally{
         currentController = null;
       }
@@ -172,37 +152,55 @@
       }
     }
 
+    // ✅ 팀 카드: 우측의 "열×행" 텍스트 제거 + 오른쪽 완전빈 열 자동 제거
     function renderTeamCard(team){
       const card = document.createElement('section');
       card.className = 'card';
 
       const head = document.createElement('header');
       const h2   = document.createElement('h2'); h2.textContent = team.title || `팀 ${team.id}`;
-      const sz   = document.createElement('div'); sz.style.color='#666'; sz.style.fontSize='12px';
-      sz.textContent = `${team.cols}열 × ${team.rows}행`;
-      head.append(h2, sz);
+      head.append(h2);                     // ← 크기 텍스트는 넣지 않음
       card.appendChild(head);
 
       const wrap  = document.createElement('div'); wrap.className = 'table-wrap';
       const table = document.createElement('table');
 
-      // 병합 셀 배치용 그리드
-      const grid = Array.from({length: team.rows}, () => Array(team.cols).fill(null));
+      // ▶ 사용된 마지막 열만 계산해 스페이서(완전 빈 열) 제거
+      let lastUsedCol = 0;
       for (const cell of team.cells){
-        const r0 = cell.r - 1, c0 = cell.c - 1;
-        grid[r0][c0] = cell;
-        const rs = cell.rowspan || 1, cs = cell.colspan || 1;
-        for (let r=r0; r<r0+rs; r++){
-          for (let c=c0; c<c0+cs; c++){
-            if (r===r0 && c===c0) continue;
-            grid[r][c] = 'skip';
+        const end = (cell.c || 1) + ((cell.colspan || 1) - 1);
+        if (end > lastUsedCol) lastUsedCol = end;
+      }
+      const colsToRender = Math.max(1, Math.min(team.cols || 1, lastUsedCol));
+
+      // 병합 셀 배치용 그리드
+      const grid = Array.from({length: team.rows}, () => Array(colsToRender).fill(null));
+
+      for (const cell of team.cells){
+        const r0 = (cell.r || 1) - 1;
+        const c0 = (cell.c || 1) - 1;
+        const rs = cell.rowspan || 1;
+        const rawCs = cell.colspan || 1;
+
+        // 셀이 오른쪽으로 colsToRender를 넘으면 잘라서 넣기
+        const colEnd = Math.min(colsToRender - 1, c0 + rawCs - 1);
+        const cs = colEnd - c0 + 1;
+        if (cs <= 0) continue; // 전부 잘린 경우
+
+        grid[r0][c0] = { ...cell, colspan: cs };
+        for (let r = r0; r < r0 + rs; r++){
+          for (let c = c0; c < c0 + cs; c++){
+            if (r === r0 && c === c0) continue;
+            if (r >= 0 && r < team.rows && c >= 0 && c < colsToRender){
+              grid[r][c] = 'skip';
+            }
           }
         }
       }
 
       for (let r=0; r<team.rows; r++){
         const tr = document.createElement('tr');
-        for (let c=0; c<team.cols; c++){
+        for (let c=0; c<colsToRender; c++){
           const cell = grid[r][c];
           if (cell === 'skip') continue;
           const td = document.createElement('td');
@@ -220,11 +218,6 @@
       wrap.appendChild(table);
       card.appendChild(wrap);
       return card;
-    }
-
-    function showMeta(text, isLoading){
-      $meta.classList.toggle('loading', !!isLoading);
-      $meta.textContent = text || '';
     }
 
     async function fetchJson(url, signal){
