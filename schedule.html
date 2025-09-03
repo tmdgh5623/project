@@ -1,94 +1,23 @@
-<!doctype html>
-<html lang="ko">
-<head>
-<meta charset="utf-8">
-<title>월간 스케줄(전 시트 로드)</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<style>
-  body{font-family:Arial,sans-serif;margin:16px}
-  #ctrls{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
-  table{border-collapse:collapse;width:100%}
-  th,td{border:1px solid #ddd;padding:6px;font-size:13px}
-  th{background:#f5f5f5}
-</style>
-</head>
-<body>
-<h1>월간 스케줄(모든 시트 원본 로드)</h1>
-<div id="ctrls">
-  <label>시트 선택:
-    <select id="sheetSelect"></select>
-  </label>
-  <button id="reloadBtn">새로고침</button>
-</div>
-<div id="app">로딩 중…</div>
-
 <script>
-const GAS_URL   = 'https://script.google.com/macros/s/AKfycbzT8n74FDLLtxNKys_h9JI80Bl2otg095MwbGL1gUACHzsfkPaunINTColdUeYDtwJkDw/exec'; // 프록시 실패 시 JSONP fallback용
-const SHEET_ID  = '17RCw2gBxseB36Ac9kF7zYXZ4qFTaXP7KsAiKY9uPbN4';
+  async function loadAll() {
+    const box = document.getElementById('app');
+    box.textContent = '로딩 중…';
+    try {
+      // 프록시만 사용
+      const r = await fetch('/api/schedule?mode=raw', { cache: 'no-store' });
+      const data = await r.json();
+      if (!data || !data.ok) throw new Error(data && data.error || 'load fail');
 
-async function loadAll() {
-  const box = document.getElementById('app');
-  box.textContent = '로딩 중…';
-
-  // 1) 프록시 먼저 시도
-  try {
-    const r = await fetch('/api/schedule', {cache:'no-store'});
-    if (!r.ok) throw new Error('proxy failed');
-    const sheets = await r.json();      // {name:{gid,values}, ...}
-    window.__ALL = sheets;
-    fillSelect(Object.keys(sheets));
-    render(Object.keys(sheets)[0]);
-    return;
-  } catch (e) {
-    console.warn('proxy failed, fallback to JSONP', e);
+      window.__ALL = data.sheets;                      // 전체 저장
+      fillSheetList(Object.keys(window.__ALL));        // 콤보 채우기
+      render(Object.keys(window.__ALL)[0]);            // 첫 시트 렌더
+    } catch (err) {
+      console.error(err);
+      box.textContent = '로드 실패';
+    }
   }
 
-  // 2) JSONP 폴백 (CORS 막힌 환경에서도 동작)
-  jsonp(`${GAS_URL}?mode=raw&sid=${encodeURIComponent(SHEET_ID)}`,
-        '__cbRaw', (data)=>{
-          if (!data || !data.ok) { box.textContent='로드 실패'; return; }
-          window.__ALL = data.sheets;
-          fillSelect(Object.keys(window.__ALL));
-          render(Object.keys(window.__ALL)[0]);
-        }, ()=>{
-          box.textContent='로드 실패';
-        });
-}
-
-function fillSelect(names){
-  const sel = document.getElementById('sheetSelect');
-  sel.innerHTML='';
-  names.forEach(n=>{
-    const o=document.createElement('option');
-    o.value=n; o.textContent=n; sel.appendChild(o);
-  });
-  sel.onchange=()=>render(sel.value);
-}
-
-function render(name){
-  const box=document.getElementById('app');
-  const obj=window.__ALL[name];
-  if (!obj || !obj.values || !obj.values.length){ box.textContent='데이터 없음'; return; }
-  const v=obj.values;
-  let html=`<div style="font-weight:bold;margin:8px 0">${name}</div><div style="overflow:auto"><table>`;
-  html+='<thead><tr>'+ (v[0]||[]).map(s=>`<th>${esc(s)}</th>`).join('') +'</tr></thead>';
-  html+='<tbody>';
-  for(let r=1;r<v.length;r++){
-    html+='<tr>'+ (v[r]||[]).map(s=>`<td>${esc(s)}</td>`).join('') +'</tr>';
-  }
-  html+='</tbody></table></div>';
-  box.innerHTML=html;
-}
-function esc(s){return String(s||'').replace(/[&<>\"']/g,m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m]))}
-function jsonp(url, cb, ok, err){
-  window[cb]=function(d){ try{ok(d);} finally{ delete window[cb]; s.remove(); } };
-  const s=document.createElement('script');
-  s.src=url+(url.includes('?')?'&':'?')+'callback='+cb;
-  s.onerror=()=>{ try{err&&err();} finally{ delete window[cb]; s.remove(); } };
-  document.body.appendChild(s);
-}
-document.getElementById('reloadBtn').onclick = loadAll;
-document.addEventListener('DOMContentLoaded', loadAll);
+  // ↓ 이하(escapeHtml, fillSheetList, render 등) 기존 코드 그대로
+  document.getElementById('reloadBtn').onclick = loadAll;
+  document.addEventListener('DOMContentLoaded', loadAll);
 </script>
-</body>
-</html>

@@ -1,20 +1,47 @@
-// /api/schedule.js  (Vercel/Node 서버리스)
+// /api/schedule.js
 export default async function handler(req, res) {
-  const GAS_URL   = process.env.GAS_SCHEDULE_URL
-                 || 'https://script.google.com/macros/s/https://script.google.com/macros/s/AKfycbzT8n74FDLLtxNKys_h9JI80Bl2otg095MwbGL1gUACHzsfkPaunINTColdUeYDtwJkDw/exec';
-  const SHEET_ID  = process.env.SCHEDULE_SHEET_ID
-                 || '17RCw2gBxseB36Ac9kF7zYXZ4qFTaXP7KsAiKY9uPbN4';
-
-  const url = `${GAS_URL}?mode=raw&sid=${encodeURIComponent(SHEET_ID)}&t=${Date.now()}`;
-
   try {
-    const r = await fetch(url, { headers: { 'cache-control': 'no-cache' }});
-    const data = await r.json();
-    if (!data.ok) return res.status(500).json(data);
-    // data.sheets = { '1월 1팀': {gid, values:[...]}, ... }
-    res.setHeader('Cache-Control', 'no-store');
-    return res.status(200).json(data.sheets);
+    // 1) 환경변수 필수 체크
+    const GAS = (process.env.GAS_URL || "").replace(/\/$/, ""); // 끝의 / 제거
+    const SID = process.env.SHEET_ID || "";
+    if (!GAS || !SID) {
+      res.status(500).json({ ok: false, error: "Missing env GAS_URL or SHEET_ID" });
+      return;
+    }
+
+    // 2) 쿼리 구성 (기본 raw, sid 없으면 기본 SID)
+    const mode = req.query.mode === "sheets" ? "sheets" : "raw";
+    const sid  = encodeURIComponent(req.query.sid || SID);
+    const url  = `${GAS}?mode=${mode}&sid=${sid}`;
+
+    // 3) 요청 (캐시 금지)
+    const r = await fetch(url, { method: "GET", cache: "no-store" });
+    const text = await r.text(); // 먼저 text로 받음 (HTML/JSONP 보호)
+
+    // 4) JSON 안전 파싱 (JSON → 실패시 JSONP 콜백 형태도 시도)
+    let data = null;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      const m = text.match(/^[^(]+\((.*)\)\s*$/s); // callback(JSON) 캡쳐
+      if (m) {
+        data = JSON.parse(m[1]);
+      }
+    }
+
+    if (!r.ok || !data) {
+      res.status(502).json({
+        ok: false,
+        error: "Upstream error",
+        status: r.status,
+        bodySample: text.slice(0, 400)
+      });
+      return;
+    }
+
+    res.setHeader("Cache-Control", "no-store");
+    res.status(200).json(data);
   } catch (e) {
-    return res.status(500).json({ ok:false, error:String(e) });
+    res.status(500).json({ ok: false, error: String(e) });
   }
 }
