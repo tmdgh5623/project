@@ -5,78 +5,64 @@
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>월간 스케줄</title>
 <style>
-  :root{
-    --nav-bg:#2c3e50;
-    --toolbar-bg:#f0f0f0;
-    --border:#dcdcdc;
-    --card-border:#e5e7eb;
-    --navH:48px;        /* 네비 높이(대략) */
-    --toolbarH:48px;    /* 툴바 높이(대략) */
-  }
+  /* 바깥(문서) 스크롤 제거 */
+  html, body { height:100%; margin:0; overflow:hidden; }
 
-  /* ===== 공통 네비게이션(월별 대상처 리스트와 동일) ===== */
+  /* ===== 공통 네비(월별 대상처 리스트와 동일) ===== */
   .nav {
-    background: var(--nav-bg);
-    color:#fff;
+    background:#2c3e50; color:#fff;
     padding:10px;
-    display:flex;
-    justify-content:flex-end;
-    gap:10px;
-    position: sticky;   /* 상단 고정 */
-    top: 0;
-    z-index: 1000;
+    display:flex; justify-content:flex-end; gap:10px;
+    position:sticky; top:0; z-index:1000;
   }
   .nav button {
     background:#fff; color:#000; border:none; border-radius:4px;
     padding:6px 12px; cursor:pointer;
   }
 
-  /* ===== 상단 툴바(월별 대상처 리스트의 #top-bar와 동일) ===== */
+  /* ===== 상단 툴바(월별 대상처 리스트의 #top-bar 동일) ===== */
   #top-bar{
-    background: var(--toolbar-bg);
+    background:#f0f0f0;
     padding:8px 15px;
-    display:flex;
-    align-items:center;
-    gap:10px;
-    position: sticky;           /* 네비 아래에 고정 */
-    top: var(--navH);
-    z-index: 900;
+    display:flex; align-items:center; gap:10px;
+    position:sticky; top:0; z-index:900;   /* JS가 실제 top 값으로 덮어씀 */
     border-bottom:1px solid #ddd;
   }
   #top-bar h1{ font-size:18px; margin:0; }
   #top-bar select, #top-bar button{
     padding:5px 10px; font-size:14px;
-    border:1px solid var(--border); border-radius:8px; background:#fff;
+    border:1px solid #dcdcdc; border-radius:8px; background:#fff;
   }
   #status{ color:#666; font-size:13px; margin-left:4px; }
 
-  /* ===== 페이지 컨텐트: 상단 2개 바를 뺀 나머지 영역만 스크롤 ===== */
-  .page {
-    height: calc(100vh - var(--navH) - var(--toolbarH));
-    overflow: auto;
-    padding: 12px 14px 16px;
-    box-sizing: border-box;
+  /* ===== 컨텐츠 영역: 이 영역만 스크롤 (높이는 JS로 계산) ===== */
+  .page{
+    overflow:auto;
+    padding:12px 14px 16px;
+    box-sizing:border-box;
+    height:calc(100vh - 96px); /* 초기값(임시), JS가 정확히 재설정 */
   }
 
-  /* 2열 그리드(전폭) */
-  .grid {
+  /* 2열 그리드 */
+  .grid{
     display:grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns:1fr 1fr;
     gap:14px;
   }
+  @media (max-width:980px){
+    .grid{ grid-template-columns:1fr; }
+  }
 
-  /* 카드(헤더 없음) */
-  .card {
-    border:1px solid var(--card-border);
+  /* 카드 & 표 */
+  .card{
+    border:1px solid #e5e7eb;
     border-radius:12px;
     overflow:hidden;
     background:#fff;
     box-shadow:0 1px 4px rgba(0,0,0,.04);
   }
-  .table-wrap { overflow:auto; }
-
-  /* 표 스타일 */
-  table { border-collapse:collapse; width:100%; table-layout:fixed; }
+  .table-wrap{ overflow:auto; }
+  table{ border-collapse:collapse; width:100%; table-layout:fixed; }
   td{
     border:1px solid #e6e6e6;
     padding:3px 6px;
@@ -85,24 +71,19 @@
     font-size:12px;
     line-height:1.15;
   }
-
-  /* 좁은 화면에서는 1열 */
-  @media (max-width:980px){
-    .grid{ grid-template-columns:1fr; }
-  }
 </style>
 </head>
 <body>
 
-<!-- 공통 네비게이션(기존 페이지와 동일) -->
-<div class="nav">
+<!-- 공통 네비 -->
+<div class="nav" id="nav">
   <button onclick="location.href='index.html'">홈</button>
   <button onclick="location.href='monthly.html'">월별 대상처 리스트</button>
   <button onclick="location.href='map.html'">지도 보기</button>
   <button onclick="location.href='schedule.html'">스케줄</button>
 </div>
 
-<!-- 월별 대상처 리스트의 상단바와 동일 구조/색상 -->
+<!-- 상단 툴바 -->
 <div id="top-bar">
   <h1>월간 스케줄</h1>
   <label for="sheetSelect"><strong>월 선택:</strong></label>
@@ -111,13 +92,29 @@
   <span id="status"></span>
 </div>
 
-<!-- 이 아래부터만 스크롤 -->
-<div class="page">
+<!-- 이 아래만 스크롤 -->
+<div class="page" id="page">
   <div id="grid" class="grid"></div>
 </div>
 
 <script>
-  // API 프록시
+  // ===== 레이아웃: 네비/툴바 실제 높이로 .page 높이 계산 (바깥 스크롤 제거) =====
+  function relayout(){
+    const nav   = document.getElementById('nav');
+    const top   = document.getElementById('top-bar');
+    const page  = document.getElementById('page');
+    const navH  = nav ? nav.offsetHeight : 0;
+    const topH  = top ? top.offsetHeight : 0;
+
+    // 툴바 sticky 기준을 네비 높이에 맞춤
+    top.style.top = navH + 'px';
+    // 컨텐츠 영역 높이를 정확히 계산
+    page.style.height = `calc(100vh - ${navH + topH}px)`;
+  }
+  window.addEventListener('load', relayout);
+  window.addEventListener('resize', relayout);
+
+  // ====== 데이터 렌더 ======
   const api = (qs) => `/api/schedule${qs ? ('?' + qs) : ''}`;
 
   const $select  = document.getElementById('sheetSelect');
@@ -125,22 +122,18 @@
   const $grid    = document.getElementById('grid');
   const $status  = document.getElementById('status');
 
-  // 현재월 "9월" 형식
   const now = new Date();
   const initMonth = (now.getMonth() + 1) + '월';
 
   init().catch(showError);
 
   async function init(){
-    // 시트 목록
     const sheets = await fetchJson(api('mode=sheets')).then(r => r.sheets || []);
     $select.innerHTML = sheets.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
-    // 기본은 현재월(없으면 첫 시트)
     const use = sheets.includes(initMonth) ? initMonth : (sheets[0] || '1월');
     $select.value = use;
 
     await render(use);
-
     $select.addEventListener('change', () => render($select.value));
     $refresh.addEventListener('click', () => render($select.value));
   }
@@ -148,22 +141,21 @@
   async function render(sheetName){
     try{
       setLoading(`${sheetName} 불러오는 중…`);
-      const url = api(new URLSearchParams({ mode: 'month', sheet: sheetName }).toString());
+      const url = api(new URLSearchParams({ mode:'month', sheet: sheetName }).toString());
       const data = await fetchJson(url);
       if(!data.ok) throw new Error(data.error || 'API 오류');
 
-      // 화면 리셋 후 1~4팀 테이블만 출력 (헤더/메타 없음)
       $grid.innerHTML = '';
       for(const team of data.teams){
         $grid.appendChild(renderTeamTable(team));
       }
       setLoading('');
+      relayout(); // 렌더 후에도 한 번 더(행이 늘면 툴바 높이가 변할 수 있음)
     }catch(e){
       showError(e);
     }
   }
 
-  // 팀 테이블 렌더 (배경색/글자색 그대로)
   function renderTeamTable(team){
     const card = document.createElement('section');
     card.className = 'card';
@@ -171,7 +163,6 @@
     wrap.className = 'table-wrap';
     const table = document.createElement('table');
 
-    // 그리드 구성(null=빈칸, 'skip'=병합 내부)
     const grid = Array.from({length: team.rows}, () => Array(team.cols).fill(null));
     for(const cell of team.cells){
       const r0 = cell.r - 1, c0 = cell.c - 1;
@@ -194,8 +185,8 @@
         if(cell){
           if(cell.rowspan > 1) td.rowSpan = cell.rowspan;
           if(cell.colspan > 1) td.colSpan = cell.colspan;
-          if(cell.bg) td.style.backgroundColor = cell.bg; // 셀 배경색
-          if(cell.fc) td.style.color = cell.fc;           // 글자색(스프레드시트 글자색 반영)
+          if(cell.bg) td.style.backgroundColor = cell.bg; // 배경색
+          if(cell.fc) td.style.color = cell.fc;           // 글자색
           td.textContent = cell.text ?? '';
         }else{
           td.textContent = '';
@@ -210,7 +201,6 @@
     return card;
   }
 
-  // 공통 유틸
   async function fetchJson(url){
     const r = await fetch(url, { cache:'no-store' });
     if(!r.ok) throw new Error(`HTTP ${r.status}`);
