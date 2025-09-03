@@ -26,67 +26,78 @@
 
   <div id="app">로딩 중…</div>
 
-  <script>
-    // HTML이 모두 만들어진 뒤 실행되도록 보장
-    window.addEventListener('DOMContentLoaded', () => {
-      const reloadBtn = document.getElementById('reloadBtn');
-      if (reloadBtn) reloadBtn.addEventListener('click', loadAll);
-      loadAll(); // 최초 1회 로드
+<!-- schedule.html 핵심 부분만 -->
+<script>
+  // ✅ 본인 값
+  const GAS_URL  = 'https://script.google.com/macros/s/AKfycbzT8n74FDLLtxNKys_h9JI80Bl2otg095MwbGL1gUACHzsfkPaunINTColdUeYDtwJkDw/exec';
+  const SHEET_ID = '17RCw2gBxseB36Ac9kF7zYXZ4qFTaXP7KsAiKY9uPbN4';
+
+  // JSONP 로더
+  function jsonp(url, cbName, onDone, onError){
+    window[cbName] = function(data){
+      try{ onDone(data); }
+      finally{
+        delete window[cbName];
+        const el = document.getElementById(cbName);
+        if (el) el.remove();
+      }
+    };
+    const s = document.createElement('script');
+    s.id = cbName;
+    s.src = url + (url.includes('?') ? '&' : '?') + 'callback=' + cbName;
+    s.onerror = () => onError && onError(new Error('JSONP load error'));
+    document.body.appendChild(s);
+  }
+
+  // 전체 시트 원본 로드
+  function loadAll(){
+    const app = document.getElementById('app');
+    app.textContent = '로딩 중…';
+    const url = `${GAS_URL}?mode=raw&sid=${encodeURIComponent(SHEET_ID)}`;
+    jsonp(url, '__cbRaw', (data)=>{
+      if(!data || !data.ok){ app.textContent = '로드 실패'; return; }
+      window.__ALL = data.sheets;                     // {시트명: {gid, values}}
+      const names = Object.keys(window.__ALL);
+      fillSheetList(names);
+      render(names[0]);
+    }, (err)=>{
+      console.error(err);
+      app.textContent = '로드 실패';
     });
+  }
 
-    async function loadAll() {
-      const box = document.getElementById('app');
-      box.textContent = '로딩 중…';
-      try {
-        // Vercel 프록시만 사용
-        const r = await fetch('/api/schedule?mode=raw', { cache: 'no-store' });
-        const data = await r.json();
-        if (!data || !data.ok) throw new Error(data && data.error || 'load fail');
+  function fillSheetList(names){
+    const sel = document.getElementById('sheetSelect');
+    sel.innerHTML = '';
+    names.forEach(n=>{
+      const opt = document.createElement('option');
+      opt.value = n; opt.textContent = n;
+      sel.appendChild(opt);
+    });
+    sel.onchange = () => render(sel.value);
+  }
 
-        window.__ALL = data.sheets || {};         // 전체 저장
-        const names = Object.keys(window.__ALL);
-        fillSheetList(names);
-        render(names[0]);                         // 첫 시트 렌더
-      } catch (err) {
-        console.error(err);
-        box.textContent = '로드 실패';
-      }
+  function render(sheetName){
+    const box = document.getElementById('app');
+    const obj = window.__ALL[sheetName];
+    if(!obj){ box.textContent = '시트 없음'; return; }
+    const values = obj.values || [];
+    if(!values.length){ box.textContent = '데이터 없음'; return; }
+
+    let html = `<div class="sheet-title">${sheetName}</div><div style="overflow:auto"><table>`;
+    html += '<thead><tr>' + (values[0]||[]).map(v=>`<th>${esc(v)}</th>`).join('') + '</tr></thead>';
+    html += '<tbody>';
+    for(let r=1;r<values.length;r++){
+      html += '<tr>' + (values[r]||[]).map(v=>`<td>${esc(v)}</td>`).join('') + '</tr>';
     }
+    html += '</tbody></table></div>';
+    box.innerHTML = html;
+  }
 
-    function fillSheetList(names) {
-      const sel = document.getElementById('sheetSelect');
-      sel.innerHTML = '';
-      (names || []).forEach(n => {
-        const opt = document.createElement('option');
-        opt.value = n; opt.textContent = n;
-        sel.appendChild(opt);
-      });
-      sel.onchange = () => render(sel.value);
-    }
+  function esc(s){ return String(s||'').replace(/[&<>"']/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m])); }
 
-    function render(sheetName) {
-      const box = document.getElementById('app');
-      const obj = (window.__ALL || {})[sheetName];
-      if (!obj) { box.textContent = '시트 없음'; return; }
-
-      const values = obj.values || [];
-      if (!values.length) { box.textContent = '데이터 없음'; return; }
-
-      let html = `<div class="sheet-title">${escapeHtml(sheetName)}</div><div style="overflow:auto"><table>`;
-      html += '<thead><tr>' + (values[0]||[]).map(v => `<th>${escapeHtml(v)}</th>`).join('') + '</tr></thead>';
-      html += '<tbody>';
-      for (let r = 1; r < values.length; r++) {
-        html += '<tr>' + (values[r]||[]).map(v => `<td>${escapeHtml(v)}</td>`).join('') + '</tr>';
-      }
-      html += '</tbody></table></div>';
-      box.innerHTML = html;
-    }
-
-    function escapeHtml(s){
-      return String(s ?? '').replace(/[&<>"']/g, m => ({
-        '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
-      }[m]));
-    }
-  </script>
+  document.getElementById('reloadBtn').onclick = loadAll;
+  document.addEventListener('DOMContentLoaded', loadAll);
+</script>
 </body>
 </html>
