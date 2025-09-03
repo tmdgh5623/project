@@ -1,36 +1,28 @@
-// project/api/schedule.js
+// /api/schedule.js
 export default async function handler(req, res) {
   try {
-    const base = process.env.GAS_URL;
-    if (!base) return res.status(500).json({ ok: false, error: 'Missing GAS_URL env' });
-
-    const { mode = 'ping', sid = '' } = req.query;
-
-    // base 에 이미 ? 가 있으므로 & 로만 이어붙입니다.
-    const sep = base.includes('?') ? '&' : '?';
-    const target =
-      base +
-      sep +
-      `mode=${encodeURIComponent(mode)}` +
-      (sid ? `&sid=${encodeURIComponent(sid)}` : '');
-
-    const r = await fetch(target);
-    const text = await r.text(); // 혹시 text/plain 으로 올 때 대비
-
-    let data;
-    try {
-      data = JSON.parse(text);
-    } catch {
-      // JSON 파싱이 안되면 그대로 내려주기(디버깅용)
-      res.setHeader('Access-Control-Allow-Origin', '*');
-      return res.status(r.ok ? 200 : r.status).send(text);
+    const base = process.env.GAS_URL; // ← googleusercontent "echo" URL 전체
+    if (!base) {
+      return res.status(500).json({ ok: false, error: 'Missing GAS_URL env' });
     }
 
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Cache-Control', 'no-store');
-    return res.status(r.ok ? 200 : r.status).json(data);
+    // base에 원래 붙어있던 파라미터 유지 + 클라이언트 쿼리(mode, sid 등) 그대로 추가
+    const upstream = new URL(base);
+    for (const [k, v] of Object.entries(req.query || {})) {
+      if (Array.isArray(v)) upstream.searchParams.set(k, v[0]);
+      else if (v !== undefined) upstream.searchParams.set(k, v);
+    }
+
+    const r = await fetch(upstream.toString(), { cache: 'no-store' });
+    const text = await r.text();
+
+    // JSON 파싱 시도 (오류 페이지일 수도 있으니 텍스트도 보관)
+    let data;
+    try { data = JSON.parse(text); }
+    catch { data = { ok: false, status: r.status, bodySample: text.slice(0, 500) }; }
+
+    res.status(r.ok ? 200 : r.status).json(data);
   } catch (err) {
-    console.error('schedule api error:', err);
-    return res.status(502).json({ ok: false, error: String(err) });
+    res.status(502).json({ ok: false, error: 'upstream error', detail: String(err) });
   }
 }
