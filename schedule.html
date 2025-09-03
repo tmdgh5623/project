@@ -1,9 +1,9 @@
 <!doctype html>
 <html lang="ko">
 <head>
-  <meta charset="utf-8">
+  <meta charset="utf-8" />
   <title>월간 스케줄(모든 시트 원본 로드)</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <style>
     body { font-family: Arial, sans-serif; margin:16px; }
     #ctrls { margin-bottom:12px; display:flex; gap:8px; flex-wrap:wrap; }
@@ -26,17 +26,18 @@
 
   <div id="app">로딩 중…</div>
 
-<!-- schedule.html 핵심 부분만 -->
 <script>
-  // ✅ 본인 값
-  const GAS_URL  = 'https://script.googleusercontent.com/macros/echo?user_content_key=AehSKLjk-4Cnuta5wVtLPTZtlqTLYqMrsQWgNbcv-b_hsYX7Uo3_O-pMMjLiaAOFcIwT9bXnbwxXITpl8gmQ8NvGyYKSeR2loj825MnVAEcpMcqg91ZfAj80zauPhpyIhtFTLWRRsOZkOYsRGm-gEU5K8MpKTiklDrVsr_uDtXhtvGnFiuKYJ3pHB5lcWgXknIjgKQuYX_-3wo1Jqu6WgYyucIkMzoUk1RARWSvbkrJTtvU40U_3IQwO5Fo46j8TWffa7i2ylvDDdfvrlFiuusInthWdMFjIiTo2MlH6gfht&lib=MPRLHm0JtGxGFsiiCTZpoZsX4MtoCVHWl';
+  /** ▼▼▼ 여기 두 값만 본인 것으로 설정 ▼▼▼ */
+  const GAS_URL  =
+    'https://script.googleusercontent.com/macros/echo?user_content_key=AehSKLjk-4Cnuta5wVtLPTZtlqTLYqMrsQWgNbcv-b_hsYX7Uo3_O-pMMjLiaAOFcIwT9bXnbwxXITpl8gmQ8NvGyYKSeR2loj825MnVAEcpMcqg91ZfAj80zauPhpyIhtFTLWRRsOZkOYsRGm-gEU5K8MpKTiklDrVsr_uDtXhtvGnFiuKYJ3pHB5lcWgXknIjgKQuYX_-3wo1Jqu6WgYyucIkMzoUk1RARWSvbkrJTtvU40U_3IQwO5Fo46j8TWffa7i2ylvDDdfvrlFiuusInthWdMFjIiTo2MlH6gfht&lib=MPRLHm0JtGxGFsiiCTZpoZsX4MtoCVHWl';
   const SHEET_ID = '17RCw2gBxseB36Ac9kF7zYXZ4qFTaXP7KsAiKY9uPbN4';
+  /** ▲▲▲ 설정 끝 ▲▲▲ */
 
-  // JSONP 로더
+  // JSONP helper
   function jsonp(url, cbName, onDone, onError){
     window[cbName] = function(data){
-      try{ onDone(data); }
-      finally{
+      try { onDone(data); }
+      finally {
         delete window[cbName];
         const el = document.getElementById(cbName);
         if (el) el.remove();
@@ -49,18 +50,29 @@
     document.body.appendChild(s);
   }
 
+  // 쿼리 자동 연결(? 또는 & 자동 선택)
+  function buildUrl(base, params){
+    const sep = base.includes('?') ? '&' : '?';
+    const qs  = new URLSearchParams(params).toString();
+    return base + sep + qs;
+  }
+
   // 전체 시트 원본 로드
   function loadAll(){
     const app = document.getElementById('app');
     app.textContent = '로딩 중…';
-    const url = `${GAS_URL}?mode=raw&sid=${encodeURIComponent(SHEET_ID)}`;
-    jsonp(url, '__cbRaw', (data)=>{
-      if(!data || !data.ok){ app.textContent = '로드 실패'; return; }
-      window.__ALL = data.sheets;                     // {시트명: {gid, values}}
+
+    // ❗절대 '?'를 직접 이어붙이지 말고 buildUrl 사용
+    const url = buildUrl(GAS_URL, { mode: 'raw', sid: SHEET_ID });
+
+    jsonp(url, '__cbRaw', (data) => {
+      if (!data || !data.ok) { app.textContent = '로드 실패'; return; }
+      window.__ALL = data.sheets;  // { 시트명: { gid, values } }
+
       const names = Object.keys(window.__ALL);
       fillSheetList(names);
       render(names[0]);
-    }, (err)=>{
+    }, (err) => {
       console.error(err);
       app.textContent = '로드 실패';
     });
@@ -69,9 +81,10 @@
   function fillSheetList(names){
     const sel = document.getElementById('sheetSelect');
     sel.innerHTML = '';
-    names.forEach(n=>{
+    names.forEach(n => {
       const opt = document.createElement('option');
-      opt.value = n; opt.textContent = n;
+      opt.value = n;
+      opt.textContent = n;
       sel.appendChild(opt);
     });
     sel.onchange = () => render(sel.value);
@@ -80,21 +93,26 @@
   function render(sheetName){
     const box = document.getElementById('app');
     const obj = window.__ALL[sheetName];
-    if(!obj){ box.textContent = '시트 없음'; return; }
+    if (!obj) { box.textContent = '시트 없음'; return; }
+
     const values = obj.values || [];
-    if(!values.length){ box.textContent = '데이터 없음'; return; }
+    if (!values.length) { box.textContent = '데이터 없음'; return; }
 
     let html = `<div class="sheet-title">${sheetName}</div><div style="overflow:auto"><table>`;
-    html += '<thead><tr>' + (values[0]||[]).map(v=>`<th>${esc(v)}</th>`).join('') + '</tr></thead>';
+    html += '<thead><tr>' + (values[0] || []).map(v => `<th>${esc(v)}</th>`).join('') + '</tr></thead>';
     html += '<tbody>';
-    for(let r=1;r<values.length;r++){
-      html += '<tr>' + (values[r]||[]).map(v=>`<td>${esc(v)}</td>`).join('') + '</tr>';
+    for (let r = 1; r < values.length; r++) {
+      html += '<tr>' + (values[r] || []).map(v => `<td>${esc(v)}</td>`).join('') + '</tr>';
     }
     html += '</tbody></table></div>';
     box.innerHTML = html;
   }
 
-  function esc(s){ return String(s||'').replace(/[&<>"']/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m])); }
+  function esc(s){
+    return String(s ?? '').replace(/[&<>"']/g, m => ({
+      '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'
+    }[m]));
+  }
 
   document.getElementById('reloadBtn').onclick = loadAll;
   document.addEventListener('DOMContentLoaded', loadAll);
