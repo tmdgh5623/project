@@ -5,7 +5,6 @@
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>월간 스케줄</title>
 <style>
-  /* 기본 레이아웃 */
   html, body { height:100%; margin:0; overflow:hidden;
     font-family:system-ui,-apple-system,Segoe UI,Roboto,'Noto Sans KR',sans-serif; color:#222; }
   .nav{ background:#2c3e50; color:#fff; padding:10px; display:flex; justify-content:flex-end; gap:10px; position:sticky; top:0; z-index:1000; }
@@ -16,29 +15,25 @@
   #top-bar select, #top-bar button{ padding:5px 10px; font-size:14px; border:1px solid #dcdcdc; border-radius:8px; background:#fff; }
   #status{ color:#666; font-size:13px; margin-left:4px; }
 
-  /* 내부 스크롤 영역 */
   .page{ overflow:auto; padding:12px 14px 16px; box-sizing:border-box; height:calc(100vh - 96px); }
 
-  /* 2열 */
   .grid{ display:grid; grid-template-columns:1fr 1fr; gap:14px; }
   @media (max-width:980px){ .grid{ grid-template-columns:1fr; } }
 
-  /* 카드/표 */
   .card{ border:1px solid #e5e7eb; border-radius:12px; overflow:hidden; background:#fff; box-shadow:0 1px 4px rgba(0,0,0,.04); }
   .teambar{ background:#e9eef5; border-bottom:1px solid #dbe2ea; color:#1f2937; font-size:12px; font-weight:700; letter-spacing:.2px; padding:8px 12px; }
 
   .table-wrap{ overflow:auto; }
   table{
     border-collapse:separate; border-spacing:0; width:100%; table-layout:fixed;
-    /* 하루(콘텐츠 행)·날짜줄 고정 높이 — 필요하면 여기만 수치 조절 */
-    --row-h: 40px;      /* 일반 콘텐츠 행 높이 */
+    --row-h: 40px;      /* 기본 ‘콘텐츠 행’ 높이 */
     --weeknum-h: 24px;  /* 작은 날짜 숫자 줄 높이 */
   }
   tbody tr{ height: var(--row-h); }
   tr[data-weekrow="1"]{ height: var(--weeknum-h); }
   tr[data-weekrow="1"] td{ text-align:center; }
 
-  /* 기본 테두리는 감춤 → 내용 있거나 진한 배경만 보이게 */
+  /* 기본 테두리는 감춤 → 내용/강한 배경만 테두리 */
   td{
     border:1px solid transparent;
     padding:3px 6px;
@@ -46,7 +41,7 @@
     word-break:break-word;
     font-size:12px;
     line-height:1.15;
-    overflow:hidden;             /* 셀은 절대 커지지 않음 */
+    overflow:hidden; /* 셀은 커지지 않음 */
   }
   td.bordered{ border-color:#e6e6e6; }
 </style>
@@ -72,6 +67,9 @@
   </div>
 
 <script>
+  /* ===== 설정: 한 주(날짜줄~다음 날짜줄 사이) 목표 ‘콘텐츠 행 개수’ ===== */
+  const TARGET_WEEK_ROWS = 5; // 원본처럼 보이게 5 추천. 필요시 4/6 등으로 조절.
+
   /* ===== 레이아웃 ===== */
   function relayout(){
     const nav  = document.getElementById('nav');
@@ -83,7 +81,7 @@
     page.style.height = `calc(100vh - ${navH + topH}px)`;
   }
   window.addEventListener('load', relayout);
-  window.addEventListener('resize', () => { relayout(); shrinkAllText(); });
+  window.addEventListener('resize', () => { relayout(); uniformizeAllWeeks(); shrinkAllText(); });
 
   /* ===== 데이터 ===== */
   const api = (qs) => `/api/schedule${qs ? ('?' + qs) : ''}`;
@@ -143,7 +141,10 @@
       }
       setLoading('');
       relayout();
-      shrinkAllText();   // 렌더 후 글자 한 번 축소
+
+      // 주 구간 높이 균일화 → 글자 축소 순서로 실행
+      uniformizeAllWeeks();
+      shrinkAllText();
     }catch(e){
       if (e.name === 'AbortError') return;
       showError(e);
@@ -304,7 +305,7 @@
               dayCounter++;
             }
 
-            // 내용 또는 진한 배경이면만 테두리 표시
+            // 내용/진한 배경이면만 테두리 표시
             const hasText = (td.textContent && td.textContent.trim() !== '') || (cell.html && visibleText(cell) !== '');
             const strongBg = cell.bg && !isGrayColor(cell.bg);
             if (hasText || strongBg) td.classList.add('bordered');
@@ -323,9 +324,33 @@
     return card;
   }
 
+  /* ===== 주 높이 균일화: 날짜줄 사이 ‘총 높이’를 동일하게 ===== */
+  function uniformizeAllWeeks(){
+    document.querySelectorAll('.table-wrap table').forEach(tbl => {
+      const rows = Array.from(tbl.querySelectorAll('tr'));
+      const baseRowH = parseFloat(getComputedStyle(tbl).getPropertyValue('--row-h')) || 40;
+      const targetBlockPx = TARGET_WEEK_ROWS * baseRowH; // 한 주 콘텐츠 총높이
+
+      // 날짜줄 인덱스 수집
+      const weekIdxs = rows
+        .map((tr, i) => tr.dataset.weekrow === '1' ? i : -1)
+        .filter(i => i >= 0);
+
+      for (let w=0; w<weekIdxs.length; w++){
+        const start = weekIdxs[w];
+        const end   = (w+1 < weekIdxs.length) ? weekIdxs[w+1] : rows.length; // 다음 날짜줄 또는 끝
+        const contentRows = rows.slice(start+1, end);
+        if (contentRows.length === 0) continue;
+
+        const perH = targetBlockPx / contentRows.length;
+        contentRows.forEach(tr => { tr.style.height = perH + 'px'; });
+      }
+    });
+  }
+
   /* ===== 셀 텍스트 자동 축소 ===== */
   function shrinkAllText(){
-    const MIN = 9;   // 최소 글자(px) — 더 줄이고 싶으면 8로
+    const MIN = 9;   // 최소 글자(px)
     const MAX = 12;  // 기본 글자(px)
 
     document.querySelectorAll('.table-wrap table').forEach(tbl => {
@@ -343,7 +368,6 @@
 
     let fs = parseFloat(getComputedStyle(td).fontSize) || 12;
 
-    // 최대 8회 줄여서 가로/세로 모두 맞추기
     for (let i=0; i<8; i++){
       const fitsH = td.scrollHeight <= td.clientHeight;
       const fitsW = td.scrollWidth  <= td.clientWidth;
