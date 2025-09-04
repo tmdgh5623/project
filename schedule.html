@@ -186,6 +186,7 @@
     return String(cell?.text ?? '').trim();
   }
 
+  // "작은 날짜 숫자"만 모여있는 줄인지 감지
   function isWeekNumberRow(rowCells, cols){
     let countDigits = 0, countCells = 0;
     for(let c=0; c<cols; c++){
@@ -198,6 +199,7 @@
     return countCells > 0 && countDigits >= Math.max(5, Math.floor(cols*0.6));
   }
 
+  // 좌상단 배지
   function addDayBadge(td, day, muted=false){
     const badge = document.createElement('span');
     badge.className = 'day-badge' + (muted ? ' muted' : '');
@@ -213,11 +215,16 @@
     const table = document.createElement('table');
 
     const month = parseMonth(sheetName);
-    const lastDay = daysInMonth(year, month);
+    const lastDay  = daysInMonth(year, month);
     const firstDow = new Date(year, month-1, 1).getDay();
-    let dayCounter = 1;
-    let weekIdx   = -1;
 
+    let dayCounter = 1;   // 상단 회색 전폭 "N일(요일)" 줄 자동 채움용
+    let weekIdx    = -1;  // 주 인덱스 (작은 숫자줄 발견 시 증가)
+
+    // 주/요일 칸당 배지는 1번만 찍기 위한 기록
+    const badgeDone = new Set(); // key = `${weekIdx}-${c}`
+
+    // 병합 반영한 그리드 구성
     const grid = Array.from({length: team.rows}, () => Array(team.cols).fill(null));
     for(const cell of team.cells){
       const r0 = cell.r - 1, c0 = cell.c - 1;
@@ -228,77 +235,66 @@
       }
     }
 
-for(let r=0; r<team.rows; r++){
-  const tr = document.createElement('tr');
-  const weekNumberRow = isWeekNumberRow(grid[r], team.cols);
-  if(weekNumberRow) weekIdx++;
+    for(let r=0; r<team.rows; r++){
+      const tr = document.createElement('tr');
+      const weekNumberRow = isWeekNumberRow(grid[r], team.cols);
+      if(weekNumberRow) weekIdx++; // 이 줄은 작은 숫자줄
 
-  for(let c=0; c<team.cols; c++){
-    const cell = grid[r][c];
-    if(cell === 'skip') continue;
+      for(let c=0; c<team.cols; c++){
+        const cell = grid[r][c];
+        if(cell === 'skip') continue;
 
-    const td = document.createElement('td');
+        const td = document.createElement('td');
 
-    if(cell){
-      if(cell.rowspan > 1) td.rowSpan = cell.rowspan;
-      if(cell.colspan > 1) td.colSpan = cell.colspan;
-      if(cell.bg) td.style.backgroundColor = cell.bg;
+        if(cell){
+          if(cell.rowspan > 1) td.rowSpan = cell.rowspan;
+          if(cell.colspan > 1) td.colSpan = cell.colspan;
+          if(cell.bg) td.style.backgroundColor = cell.bg;
 
-      const textNow = visibleText(cell);
-      const isDay = !!cell.day || /^\d{1,2}$/.test(textNow);
+          const textNow = visibleText(cell);
 
-      // === 날짜/일반 셀 렌더 ===
-      if (isDay) {
-        // 날짜는 리치HTML 무시하고 텍스트만(숫자가 흰색으로 숨는 문제 방지)
-        td.textContent = textNow;
-      } else if (cell.html && textNow !== '') {
-        td.innerHTML = cell.html; // 일반 셀은 부분 글자색 반영
-      } else {
-        if(cell.fc) td.style.color = cell.fc;
-        td.textContent = textNow;
-      }
+          // 0) 작은 숫자줄은 **내용을 숨김** (숫자 자체는 표시하지 않음)
+          if (weekNumberRow) {
+            td.textContent = ''; // 줄 레이아웃만 유지
+          } else {
+            // 1) 일반 데이터 렌더 (부분 글자색 지원)
+            if(cell.html && textNow !== '') td.innerHTML = cell.html;
+            else { if(cell.fc) td.style.color = cell.fc; td.textContent = textNow; }
 
-      // ① 빈 전폭 회색 줄 → 'N일(요일)' 자동 기입
-      const colspan = cell.colspan || 1;
-      const looksEmpty = (textNow === '');
-      const nearFullWidth = (team.cols - colspan) <= 1;
-      if(looksEmpty && nearFullWidth && isGrayColor(cell.bg)){
-        if(dayCounter <= lastDay){
-          td.textContent = `${dayCounter}일(${dowKR(year, month, dayCounter)})`;
-          td.style.fontWeight = '700';
+            // 2) "전폭 회색 줄"에 내용이 비어있으면 'N일(요일)' 자동 기입
+            const colspan = cell.colspan || 1;
+            const looksEmpty = (textNow === '');
+            const nearFullWidth = (team.cols - colspan) <= 1;
+            if(looksEmpty && nearFullWidth && isGrayColor(cell.bg)){
+              const maxDay = lastDay;
+              if(dayCounter <= maxDay){
+                td.textContent = `${dayCounter}일(${dowKR(year, month, dayCounter)})`;
+                td.style.fontWeight = '700';
+              }
+              dayCounter++;
+            }
+
+            // 3) 각 주/요일 칸에 **배지 1번만** 표시
+            const pos = (weekIdx >= 0) ? ((weekIdx * 7) + c - firstDow + 1) : NaN;
+            if (!isNaN(pos)) {
+              const key = `${weekIdx}-${c}`;
+              if (!badgeDone.has(key) && (cell.colspan || 1) >= 1) {
+                const inMonth = (pos >= 1 && pos <= lastDay);
+                const day = inMonth ? pos
+                          : (pos < 1 ? (new Date(year, month-1, 0).getDate() + pos)
+                                     : (pos - lastDay));
+                addDayBadge(td, day, !inMonth);
+                badgeDone.add(key);
+              }
+            }
+          }
+        }else{
+          td.textContent = '';
         }
-        dayCounter++;
+        tr.appendChild(td);
       }
-
-      // ② 숫자줄(작은 날짜 숫자들) 가시성 보정: 당월 진하게, 외달 연하게
-      if (isDay){
-        const pos = (weekIdx >= 0) ? ((weekIdx * 7) + c - firstDow + 1) : NaN;
-        const inMonth = (pos >= 1 && pos <= lastDay);
-        td.style.color = inMonth ? '#111827' : '#9ca3af';
-        td.style.fontWeight = inMonth ? '700' : '600';
-        td.style.textAlign = 'center';
-      }
-
-      // ③ 내용행(주번호줄이 아닌 행)엔 좌상단 일자 배지
-      if (!weekNumberRow){
-        const pos = (weekIdx >= 0) ? ((weekIdx * 7) + c - firstDow + 1) : NaN;
-        if (!isNaN(pos) && (cell.colspan || 1) === 1){
-          const inMonth = (pos >= 1 && pos <= lastDay);
-          addDayBadge(
-            td,
-            inMonth ? pos : (pos < 1 ? (new Date(year, month-1, 0).getDate() + pos) : (pos - lastDay)),
-            !inMonth
-          );
-        }
-      }
-
-    } else {
-      td.textContent = '';
+      table.appendChild(tr);
     }
-    tr.appendChild(td);
-  }
-  table.appendChild(tr);
-}
 
     wrap.appendChild(table);
     card.appendChild(wrap);
