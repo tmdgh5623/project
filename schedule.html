@@ -7,76 +7,28 @@
 <style>
   html, body { height:100%; margin:0; overflow:hidden; font-family:system-ui,-apple-system,Segoe UI,Roboto,'Noto Sans KR',sans-serif; color:#222; }
 
-  .nav{
-    background:#2c3e50; color:#fff;
-    padding:10px;
-    display:flex; justify-content:flex-end; gap:10px;
-    position:sticky; top:0; z-index:1000;
-  }
-  .nav button{
-    background:#fff; color:#000; border:none; border-radius:4px;
-    padding:6px 12px; cursor:pointer;
-  }
+  .nav{ background:#2c3e50; color:#fff; padding:10px; display:flex; justify-content:flex-end; gap:10px; position:sticky; top:0; z-index:1000; }
+  .nav button{ background:#fff; color:#000; border:none; border-radius:4px; padding:6px 12px; cursor:pointer; }
 
-  #top-bar{
-    background:#f0f0f0; border-bottom:1px solid #ddd;
-    padding:8px 15px;
-    display:flex; align-items:center; gap:10px;
-    position:sticky; top:0; z-index:900;
-  }
+  #top-bar{ background:#f0f0f0; border-bottom:1px solid #ddd; padding:8px 15px; display:flex; align-items:center; gap:10px; position:sticky; top:0; z-index:900; }
   #top-bar h1{ font-size:18px; margin:0; }
-  #top-bar select, #top-bar button{
-    padding:5px 10px; font-size:14px;
-    border:1px solid #dcdcdc; border-radius:8px; background:#fff;
-  }
+  #top-bar select, #top-bar button{ padding:5px 10px; font-size:14px; border:1px solid #dcdcdc; border-radius:8px; background:#fff; }
   #status{ color:#666; font-size:13px; margin-left:4px; }
 
-  .page{
-    overflow:auto;
-    padding:12px 14px 16px;
-    box-sizing:border-box;
-    height:calc(100vh - 96px);
-  }
+  .page{ overflow:auto; padding:12px 14px 16px; box-sizing:border-box; height:calc(100vh - 96px); }
 
   .grid{ display:grid; grid-template-columns:1fr 1fr; gap:14px; }
   @media (max-width:980px){ .grid{ grid-template-columns:1fr; } }
 
-  .card{
-    border:1px solid #e5e7eb;
-    border-radius:12px;
-    overflow:hidden;
-    background:#fff;
-    box-shadow:0 1px 4px rgba(0,0,0,.04);
-  }
-  .teambar{
-    background:#e9eef5;
-    border-bottom:1px solid #dbe2ea;
-    color:#1f2937;
-    font-size:12px;
-    font-weight:700;
-    letter-spacing:.2px;
-    padding:8px 12px;
-  }
+  .card{ border:1px solid #e5e7eb; border-radius:12px; overflow:hidden; background:#fff; box-shadow:0 1px 4px rgba(0,0,0,.04); }
+  .teambar{ background:#e9eef5; border-bottom:1px solid #dbe2ea; color:#1f2937; font-size:12px; font-weight:700; letter-spacing:.2px; padding:8px 12px; }
 
   .table-wrap{ overflow:auto; }
   table{ border-collapse:collapse; width:100%; table-layout:fixed; }
-  td{
-    border:1px solid #e6e6e6;
-    padding:3px 6px;
-    vertical-align:top;
-    word-break:break-word;
-    font-size:12px;
-    line-height:1.15;
-    position: relative; /* ← 배지 위치 기준 */
-  }
+  td{ border:1px solid #e6e6e6; padding:3px 6px; vertical-align:top; word-break:break-word; font-size:12px; line-height:1.15; position:relative; }
 
-  /* 일자 배지 */
-  .day-badge{
-    position:absolute; top:3px; left:4px;
-    font-size:11px; font-weight:700; line-height:1;
-    color:#111827; opacity:.95; pointer-events:none;
-    user-select:none;
-  }
+  /* 좌상단 일자 배지 */
+  .day-badge{ position:absolute; top:3px; left:4px; font-size:11px; font-weight:700; line-height:1; color:#111827; opacity:.95; pointer-events:none; user-select:none; }
   .day-badge.muted{ color:#9ca3af; font-weight:600; }
 </style>
 </head>
@@ -116,7 +68,6 @@
 
   /* ===== 데이터 ===== */
   const api = (qs) => `/api/schedule${qs ? ('?' + qs) : ''}`;
-
   const $select  = document.getElementById('sheetSelect');
   const $refresh = document.getElementById('refreshBtn');
   const $grid    = document.getElementById('grid');
@@ -131,13 +82,12 @@
   init().catch(showError);
 
   async function init(){
-    // 시트 목록: 세션 캐시 5분
+    // 시트 목록(5분 캐시)
     let sheets = null;
     try{
       const cached = JSON.parse(sessionStorage.getItem('sheets:v1') || 'null');
       if (cached && Date.now() - cached.t < 5*60*1000) sheets = cached.list;
     }catch(_){}
-
     if (!sheets) {
       const j = await fetchJsonRetry(api('mode=sheets'));
       sheets = j.sheets || [];
@@ -153,13 +103,12 @@
       clearTimeout(changeTimer);
       changeTimer = setTimeout(() => render($select.value), 250);
     });
-    $refresh.addEventListener('click',  () => render($select.value));
+    $refresh.addEventListener('click', () => render($select.value));
   }
 
   async function render(sheetName){
     if (renderAborter) renderAborter.abort();
     renderAborter = new AbortController();
-
     try{
       setLoading(`${sheetName} 불러오는 중…`);
       const data = await fetchJsonRetry(
@@ -188,7 +137,6 @@
       try{
         const r = await fetch(url, { cache:'no-store', signal });
         if (r.ok) return r.json();
-
         if (r.status === 429 || r.status === 503){
           attempt++;
           if (attempt > retries) throw new Error(`HTTP ${r.status}`);
@@ -250,7 +198,6 @@
     return countCells > 0 && countDigits >= Math.max(5, Math.floor(cols*0.6));
   }
 
-  // 배지 추가
   function addDayBadge(td, day, muted=false){
     const badge = document.createElement('span');
     badge.className = 'day-badge' + (muted ? ' muted' : '');
@@ -259,16 +206,10 @@
   }
 
   function renderTeam(team, { sheetName, year } = {}){
-    const card = document.createElement('section');
-    card.className = 'card';
+    const card = document.createElement('section'); card.className = 'card';
+    const bar = document.createElement('div'); bar.className = 'teambar'; bar.textContent = `${team.id}팀`; card.appendChild(bar);
 
-    const bar = document.createElement('div');
-    bar.className = 'teambar';
-    bar.textContent = `${team.id}팀`;
-    card.appendChild(bar);
-
-    const wrap  = document.createElement('div');
-    wrap.className = 'table-wrap';
+    const wrap  = document.createElement('div'); wrap.className = 'table-wrap';
     const table = document.createElement('table');
 
     const month = parseMonth(sheetName);
@@ -282,11 +223,8 @@
       const r0 = cell.r - 1, c0 = cell.c - 1;
       grid[r0][c0] = cell;
       const rs = cell.rowspan || 1, cs = cell.colspan || 1;
-      for(let r=r0; r<r0+rs; r++){
-        for(let c=c0; c<c0+cs; c++){
-          if(r===r0 && c===c0) continue;
-          grid[r][c] = 'skip';
-        }
+      for(let r=r0; r<r0+rs; r++) for(let c=c0; c<c0+cs; c++){
+        if(r===r0 && c===c0) continue; grid[r][c] = 'skip';
       }
     }
 
@@ -298,6 +236,7 @@
       for(let c=0; c<team.cols; c++){
         const cell = grid[r][c];
         if(cell === 'skip') continue;
+
         const td = document.createElement('td');
 
         if(cell){
@@ -306,10 +245,19 @@
           if(cell.bg) td.style.backgroundColor = cell.bg;
 
           const textNow = visibleText(cell);
-          if(cell.html && textNow !== '') td.innerHTML = cell.html;
-          else { if(cell.fc) td.style.color = cell.fc; td.textContent = textNow; }
+          const isTwoDigitNumber = /^\d{1,2}$/.test(textNow);
 
-          /* ① 빈 전폭 회색 줄 → 'N일(요일)' */
+          // === 핵심 수정: 날짜 숫자(01~31)는 리치HTML 무시하고 텍스트로 강제 렌더 ===
+          if (isTwoDigitNumber) {
+            td.textContent = textNow; // 인라인 색상(span) 제거
+          } else if (cell.html && textNow !== '') {
+            td.innerHTML = cell.html; // 부분 글자색이 필요한 일반 셀만 HTML 사용
+          } else {
+            if(cell.fc) td.style.color = cell.fc;
+            td.textContent = textNow;
+          }
+
+          // 빈 전폭 회색 줄이면 'N일(요일)' 자동 생성
           const colspan = cell.colspan || 1;
           const looksEmpty = (textNow === '');
           const nearFullWidth = (team.cols - colspan) <= 1;
@@ -321,9 +269,8 @@
             dayCounter++;
           }
 
-          /* ② 숫자줄(작은 숫자) → 가시성 보정 */
-          const isTwoDigitNumber = /^\d{1,2}$/.test(textNow);
-          if (isTwoDigitNumber && isGrayColor(cell.bg)) {
+          // 숫자줄 가시성 보정(당월 진하게, 외달 연하게)
+          if (isTwoDigitNumber){
             const pos = (weekIdx >= 0) ? ((weekIdx * 7) + c - firstDow + 1) : NaN;
             const inMonth = (pos >= 1 && pos <= lastDay);
             td.style.color = inMonth ? '#111827' : '#9ca3af';
@@ -331,25 +278,12 @@
             td.style.textAlign = 'center';
           }
 
-          /* ③ 항상 보이는 '일자 배지' (병합되지 않은 1일 칸에 표시, 숫자줄 제외) */
-          if (!weekNumberRow) {
+          // 상단 배지(내용행에만)
+          if (!weekNumberRow){
             const pos = (weekIdx >= 0) ? ((weekIdx * 7) + c - firstDow + 1) : NaN;
-            if (!isNaN(pos) && (cell.colspan || 1) === 1) {
+            if (!isNaN(pos) && (cell.colspan || 1) === 1){
               const inMonth = (pos >= 1 && pos <= lastDay);
-              if (inMonth) addDayBadge(td, pos, false);
-              else addDayBadge(td, (pos < 1 ? (new Date(year, month-1, 0).getDate() + pos) : (pos - lastDay)), true);
-            }
-          }
-
-          /* ④ 주 번호 줄(백업) */
-          if(weekNumberRow){
-            const t = textNow;
-            if(/^\d{1,2}$/.test(t)){
-              const pos = (weekIdx * 7) + c - firstDow + 1;
-              const isCurrMonth = (pos >= 1 && pos <= lastDay);
-              td.style.color = isCurrMonth ? '#111827' : '#9ca3af';
-              td.style.fontWeight = isCurrMonth ? '700' : '600';
-              td.style.textAlign = 'center';
+              addDayBadge(td, inMonth ? pos : (pos < 1 ? (new Date(year, month-1, 0).getDate() + pos) : (pos - lastDay)), !inMonth);
             }
           }
         }else{
