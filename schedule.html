@@ -5,10 +5,8 @@
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>월간 스케줄</title>
 <style>
-  /* 문서 스크롤 제거, 내부 컨테이너만 스크롤 */
   html, body { height:100%; margin:0; overflow:hidden; font-family:system-ui,-apple-system,Segoe UI,Roboto,'Noto Sans KR',sans-serif; color:#222; }
 
-  /* 공통 네비(월별 대상처 리스트와 동일 톤) */
   .nav{
     background:#2c3e50; color:#fff;
     padding:10px;
@@ -20,12 +18,11 @@
     padding:6px 12px; cursor:pointer;
   }
 
-  /* 상단 바(월별 대상처 리스트의 #top-bar 스타일) */
   #top-bar{
     background:#f0f0f0; border-bottom:1px solid #ddd;
     padding:8px 15px;
     display:flex; align-items:center; gap:10px;
-    position:sticky; top:0; z-index:900; /* JS에서 top 값 보정 */
+    position:sticky; top:0; z-index:900;
   }
   #top-bar h1{ font-size:18px; margin:0; }
   #top-bar select, #top-bar button{
@@ -34,19 +31,16 @@
   }
   #status{ color:#666; font-size:13px; margin-left:4px; }
 
-  /* 이 영역만 스크롤 */
   .page{
     overflow:auto;
     padding:12px 14px 16px;
     box-sizing:border-box;
-    height:calc(100vh - 96px); /* 실제 값은 JS가 재계산 */
+    height:calc(100vh - 96px);
   }
 
-  /* 2열 전폭 그리드 */
   .grid{ display:grid; grid-template-columns:1fr 1fr; gap:14px; }
   @media (max-width:980px){ .grid{ grid-template-columns:1fr; } }
 
-  /* 카드/표 */
   .card{
     border:1px solid #e5e7eb;
     border-radius:12px;
@@ -54,7 +48,6 @@
     background:#fff;
     box-shadow:0 1px 4px rgba(0,0,0,.04);
   }
-  /* 팀 라벨(강조) */
   .teambar{
     background:#e9eef5;
     border-bottom:1px solid #dbe2ea;
@@ -78,7 +71,6 @@
 </style>
 </head>
 <body>
-  <!-- 공통 네비 -->
   <div class="nav" id="nav">
     <button onclick="location.href='index.html'">홈</button>
     <button onclick="location.href='monthly.html'">월별 대상처 리스트</button>
@@ -86,7 +78,6 @@
     <button onclick="location.href='schedule.html'">스케줄</button>
   </div>
 
-  <!-- 상단 바 -->
   <div id="top-bar">
     <h1>월간 스케줄</h1>
     <label for="sheetSelect"><strong>월 선택:</strong></label>
@@ -95,7 +86,6 @@
     <span id="status"></span>
   </div>
 
-  <!-- 내부 스크롤 영역 -->
   <div class="page" id="page">
     <div id="grid" class="grid"></div>
   </div>
@@ -125,14 +115,13 @@
   const now = new Date();
   const initMonth = (now.getMonth() + 1) + '월';
 
-  // 요청 중복 방지용
   let renderAborter = null;
   let changeTimer = null;
 
   init().catch(showError);
 
   async function init(){
-    // 1) 시트 목록: 세션 캐시 5분
+    // 시트 목록: 세션 캐시 5분
     let sheets = null;
     try{
       const cached = JSON.parse(sessionStorage.getItem('sheets:v1') || 'null');
@@ -145,13 +134,11 @@
       sessionStorage.setItem('sheets:v1', JSON.stringify({ t: Date.now(), list: sheets }));
     }
 
-    // 2) 셀렉트 구성 & 기본값
     $select.innerHTML = sheets.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
     $select.value = sheets.includes(initMonth) ? initMonth : (sheets[0] || '1월');
 
     await render($select.value);
 
-    // 디바운스: 250ms
     $select.addEventListener('change', () => {
       clearTimeout(changeTimer);
       changeTimer = setTimeout(() => render($select.value), 250);
@@ -160,7 +147,6 @@
   }
 
   async function render(sheetName){
-    // 이전 렌더 취소
     if (renderAborter) renderAborter.abort();
     renderAborter = new AbortController();
 
@@ -180,12 +166,12 @@
       setLoading('');
       relayout();
     }catch(e){
-      if (e.name === 'AbortError') return; // 새 요청으로 교체된 경우 조용히 종료
+      if (e.name === 'AbortError') return;
       showError(e);
     }
   }
 
-  /* ===== 네트워크 유틸: 429/503 재시도 + Abort 지원 ===== */
+  /* ===== 네트워크 유틸: 429/503 재시도 + Abort ===== */
   async function fetchJsonRetry(url, { retries = 5, signal } = {}){
     let attempt = 0;
     while (true){
@@ -193,7 +179,6 @@
         const r = await fetch(url, { cache:'no-store', signal });
         if (r.ok) return r.json();
 
-        // 레이트리밋/일시 장애는 백오프 재시도
         if (r.status === 429 || r.status === 503){
           attempt++;
           if (attempt > retries) throw new Error(`HTTP ${r.status}`);
@@ -214,13 +199,14 @@
     }
   }
 
-  /* ===== 렌더 유틸 (그대로) ===== */
+  /* ===== 렌더 유틸 ===== */
   function parseMonth(sheetName){
     const m = parseInt(String(sheetName).replace(/\D+/g,''),10);
     return isNaN(m) ? (new Date().getMonth()+1) : m;
   }
   function daysInMonth(y, m){ return new Date(y, m, 0).getDate(); }
   function dowKR(y,m,d){ return ['일','월','화','수','목','금','토'][new Date(y, m-1, d).getDay()]; }
+
   function isGrayColor(c){
     if(!c) return false;
     c = String(c).trim().toLowerCase();
@@ -234,12 +220,14 @@
     }
     return false;
   }
+
   function visibleText(cell){
     if(cell?.html){
       return String(cell.html).replace(/<br\s*\/?>/gi,' ').replace(/&nbsp;/gi,' ').replace(/<[^>]*>/g,'').trim();
     }
     return String(cell?.text ?? '').trim();
   }
+
   function isWeekNumberRow(rowCells, cols){
     let countDigits = 0, countCells = 0;
     for(let c=0; c<cols; c++){
@@ -303,6 +291,7 @@
           if(cell.html && textNow !== '') td.innerHTML = cell.html;
           else { if(cell.fc) td.style.color = cell.fc; td.textContent = textNow; }
 
+          /* ① 회색 전폭 줄이 비어있으면 'N일(요일)' 자동 기입 */
           const colspan = cell.colspan || 1;
           const looksEmpty = (visibleText(cell) === '');
           const nearFullWidth = (team.cols - colspan) <= 1;
@@ -314,13 +303,25 @@
             dayCounter++;
           }
 
+          /* ② 날짜 숫자 줄(작은 숫자들) 가시성 강제 */
+          const isTwoDigitNumber = /^\d{1,2}$/.test(textNow);
+          if (isTwoDigitNumber && isGrayColor(cell.bg)) {
+            const pos = (weekIdx >= 0) ? ((weekIdx * 7) + c - firstDow + 1) : NaN;
+            const inMonth = (pos >= 1 && pos <= lastDay);
+            td.style.color = inMonth ? '#111827' : '#9ca3af';  // 이번달 진하게, 외달 연회색
+            td.style.fontWeight = inMonth ? '700' : '600';
+            td.style.textAlign = 'center';
+          }
+
+          /* ③ 주 번호 줄 색 보정(백업 로직) */
           if(weekNumberRow){
-            const t = visibleText(cell);
+            const t = textNow;
             if(/^\d{1,2}$/.test(t)){
               const pos = (weekIdx * 7) + c - firstDow + 1;
               const isCurrMonth = (pos >= 1 && pos <= lastDay);
               td.style.color = isCurrMonth ? '#111827' : '#9ca3af';
               td.style.fontWeight = isCurrMonth ? '700' : '600';
+              td.style.textAlign = 'center';
             }
           }
         }else{
@@ -341,6 +342,5 @@
   function showError(e){ console.error(e); setLoading(`오류: ${e?.message || e}`); }
   function esc(s){ return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
 </script>
-
 </body>
 </html>
