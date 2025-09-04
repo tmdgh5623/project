@@ -101,14 +101,13 @@
   </div>
 
 <script>
-  /* ===== 레이아웃: 바깥 스크롤 제거하고 내부 .page만 스크롤 ===== */
+  /* ===== 레이아웃 ===== */
   function relayout(){
     const nav  = document.getElementById('nav');
     const top  = document.getElementById('top-bar');
     const page = document.getElementById('page');
     const navH = nav ? nav.offsetHeight : 0;
     const topH = top ? top.offsetHeight : 0;
-
     top.style.top = navH + 'px';
     page.style.height = `calc(100vh - ${navH + topH}px)`;
   }
@@ -132,9 +131,7 @@
     const sheets = await fetchJson(api('mode=sheets')).then(r => r.sheets || []);
     $select.innerHTML = sheets.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
     $select.value = sheets.includes(initMonth) ? initMonth : (sheets[0] || '1월');
-
     await render($select.value);
-
     $select.addEventListener('change', () => render($select.value));
     $refresh.addEventListener('click',  () => render($select.value));
   }
@@ -146,7 +143,7 @@
       if(!data.ok) throw new Error(data.error || 'API 오류');
 
       $grid.innerHTML = '';
-      const year = data.year || (new Date()).getFullYear(); // API에 year가 없으면 올해로 가정
+      const year = data.year || (new Date()).getFullYear(); // year 미제공 시 올해
       for(const team of data.teams){
         $grid.appendChild(renderTeam(team, { sheetName, year }));
       }
@@ -157,30 +154,46 @@
     }
   }
 
-  /* ===== 일자 자동 표기 보조 함수 ===== */
+  /* ===== 유틸 ===== */
   function parseMonth(sheetName){
     const m = parseInt(String(sheetName).replace(/\D+/g,''),10);
     return isNaN(m) ? (new Date().getMonth()+1) : m;
   }
-  function daysInMonth(year, month){ return new Date(year, month, 0).getDate(); }
+  function daysInMonth(y, m){ return new Date(y, m, 0).getDate(); }
   function dowKR(y,m,d){ return ['일','월','화','수','목','금','토'][new Date(y, m-1, d).getDay()]; }
+
+  // 회색 판정 강화 (HEX, rgb/rgba 모두)
   function isGrayColor(c){
     if(!c) return false;
-    c = c.toLowerCase();
-    // 회색 계열 대략 탐지 (시트 변환 색이 조금 달라도 잡히게 폭넓게)
-    return ['#eee','#e6e6e6','#e5e7eb','#f0f0f0','#dddddd','#dcdcdc','#ececec','#efefef','#e9eef5'].some(g => c.startsWith(g));
-  }
-  function hasAnyText(cell){
-    if(!cell) return false;
-    if(cell.html && cell.html.trim() !== '') return true;
-    if((cell.text ?? '').toString().trim() !== '') return true;
+    c = String(c).trim().toLowerCase();
+    const common = ['#eee','#e6e6e6','#e5e7eb','#f0f0f0','#dddddd','#dcdcdc','#ececec','#efefef','#e9eef5','#f3f4f6','#e0e0e0','#cccccc'];
+    if(common.some(x => c.startsWith(x))) return true;
+    const m = c.match(/rgba?\((\d+)[,\s]+(\d+)[,\s]+(\d+)/);
+    if(m){
+      const r=+m[1], g=+m[2], b=+m[3];
+      const avg = (r+g+b)/3;
+      const maxDiff = Math.max(Math.abs(r-avg), Math.abs(g-avg), Math.abs(b-avg));
+      return avg >= 200 && maxDiff <= 10; // 밝고 채도 낮은 회색
+    }
     return false;
+  }
+
+  // HTML이 “보이는 텍스트” 기준으로 비었는지 검사
+  function htmlLooksEmpty(html){
+    if(!html) return true;
+    const stripped = String(html)
+      .replace(/<br\s*\/?>/gi, ' ')        // 줄바꿈은 공백 취급
+      .replace(/&nbsp;/gi, ' ')            // nbsp 제거
+      .replace(/<[^>]*>/g, '')             // 태그 제거
+      .trim();
+    return stripped === '';
   }
 
   function renderTeam(team, { sheetName, year } = {}){
     const card = document.createElement('section');
     card.className = 'card';
 
+    // 상단 팀 라벨 (디자인 유지)
     const bar = document.createElement('div');
     bar.className = 'teambar';
     bar.textContent = `${team.id}팀`;
@@ -190,7 +203,7 @@
     wrap.className = 'table-wrap';
     const table = document.createElement('table');
 
-    // 팀 내 날짜 카운터 준비
+    // 날짜 카운터 준비
     const month = parseMonth(sheetName);
     const lastDay = daysInMonth(year, month);
     let dayCounter = 1;
@@ -215,6 +228,7 @@
       for(let c=0; c<team.cols; c++){
         const cell = grid[r][c];
         if(cell === 'skip') continue;
+
         const td = document.createElement('td');
 
         if(cell){
@@ -222,27 +236,30 @@
           if(cell.colspan > 1) td.colSpan = cell.colspan;
           if(cell.bg) td.style.backgroundColor = cell.bg;
 
-          // ① 원 데이터가 HTML을 주면 그대로
-          if(cell.html && cell.html.trim() !== ''){
+          // 데이터 우선 렌더 (html > text)
+          if(cell.html && !htmlLooksEmpty(cell.html)){
             td.innerHTML = cell.html;
           }else{
             if(cell.fc) td.style.color = cell.fc;
             td.textContent = (cell.text ?? '').toString();
           }
 
-          // ② "회색 + 전폭 병합 + 내용 없음"이면 일자 자동 표기
-          const isFullWidth = (cell.colspan || 1) >= team.cols;
-          const empty = !hasAnyText(cell);
-          if(empty && isFullWidth && isGrayColor(cell.bg)){
+          // 회색 전폭(±1 허용) + 내용 실질적으로 비어있으면 → 날짜 자동 표기
+          const colspan = cell.colspan || 1;
+          const nearFullWidth = (team.cols - colspan) <= 1; // team.cols와 1칸 차이까지 허용
+          const looksEmpty = htmlLooksEmpty(cell.html) && (!cell.text || String(cell.text).trim()==='');
+
+          if(looksEmpty && nearFullWidth && isGrayColor(cell.bg)){
             if(dayCounter <= lastDay){
               td.textContent = `${dayCounter}일(${dowKR(year, month, dayCounter)})`;
               td.style.fontWeight = '700';
             }
-            dayCounter++; // 다음 회색줄은 다음 날
+            dayCounter++;
           }
         }else{
           td.textContent = '';
         }
+
         tr.appendChild(td);
       }
       table.appendChild(tr);
@@ -253,7 +270,6 @@
     return card;
   }
 
-  /* ===== 유틸 ===== */
   async function fetchJson(url){
     const r = await fetch(url, { cache:'no-store' });
     if(!r.ok) throw new Error(`HTTP ${r.status}`);
