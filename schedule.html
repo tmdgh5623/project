@@ -5,31 +5,36 @@
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>월간 스케줄</title>
 <style>
-  html, body { height:100%; margin:0; overflow:hidden; font-family:system-ui,-apple-system,Segoe UI,Roboto,'Noto Sans KR',sans-serif; color:#222; }
+  /* 레이아웃/폰트 */
+  html, body { height:100%; margin:0; overflow:hidden;
+    font-family:system-ui,-apple-system,Segoe UI,Roboto,'Noto Sans KR',sans-serif; color:#222; }
 
-  .nav{ background:#2c3e50; color:#fff; padding:10px; display:flex; justify-content:flex-end; gap:10px; position:sticky; top:0; z-index:1000; }
+  /* 상단 네비 */
+  .nav{ background:#2c3e50; color:#fff; padding:10px;
+    display:flex; justify-content:flex-end; gap:10px; position:sticky; top:0; z-index:1000; }
   .nav button{ background:#fff; color:#000; border:none; border-radius:4px; padding:6px 12px; cursor:pointer; }
 
-  #top-bar{ background:#f0f0f0; border-bottom:1px solid #ddd; padding:8px 15px; display:flex; align-items:center; gap:10px; position:sticky; top:0; z-index:900; }
+  /* 상단 바 */
+  #top-bar{ background:#f0f0f0; border-bottom:1px solid #ddd; padding:8px 15px;
+    display:flex; align-items:center; gap:10px; position:sticky; top:0; z-index:900; }
   #top-bar h1{ font-size:18px; margin:0; }
   #top-bar select, #top-bar button{ padding:5px 10px; font-size:14px; border:1px solid #dcdcdc; border-radius:8px; background:#fff; }
   #status{ color:#666; font-size:13px; margin-left:4px; }
 
+  /* 내부 스크롤 영역 */
   .page{ overflow:auto; padding:12px 14px 16px; box-sizing:border-box; height:calc(100vh - 96px); }
 
+  /* 2열 전폭 */
   .grid{ display:grid; grid-template-columns:1fr 1fr; gap:14px; }
   @media (max-width:980px){ .grid{ grid-template-columns:1fr; } }
 
+  /* 카드/표 */
   .card{ border:1px solid #e5e7eb; border-radius:12px; overflow:hidden; background:#fff; box-shadow:0 1px 4px rgba(0,0,0,.04); }
   .teambar{ background:#e9eef5; border-bottom:1px solid #dbe2ea; color:#1f2937; font-size:12px; font-weight:700; letter-spacing:.2px; padding:8px 12px; }
 
   .table-wrap{ overflow:auto; }
   table{ border-collapse:collapse; width:100%; table-layout:fixed; }
-  td{ border:1px solid #e6e6e6; padding:3px 6px; vertical-align:top; word-break:break-word; font-size:12px; line-height:1.15; position:relative; }
-
-  /* 좌상단 일자 배지 */
-  .day-badge{ position:absolute; top:3px; left:4px; font-size:11px; font-weight:700; line-height:1; color:#111827; opacity:.95; pointer-events:none; user-select:none; }
-  .day-badge.muted{ color:#9ca3af; font-weight:600; }
+  td{ border:1px solid #e6e6e6; padding:3px 6px; vertical-align:top; word-break:break-word; font-size:12px; line-height:1.15; }
 </style>
 </head>
 <body>
@@ -186,7 +191,7 @@
     return String(cell?.text ?? '').trim();
   }
 
-  // "작은 날짜 숫자"만 모여있는 줄인지 감지
+  // "작은 날짜 숫자(01~31)"로 꽉 찬 얇은 줄인지 감지
   function isWeekNumberRow(rowCells, cols){
     let countDigits = 0, countCells = 0;
     for(let c=0; c<cols; c++){
@@ -199,96 +204,105 @@
     return countCells > 0 && countDigits >= Math.max(5, Math.floor(cols*0.6));
   }
 
-  // 좌상단 배지
-  function addDayBadge(td, day, muted=false){
-    const badge = document.createElement('span');
-    badge.className = 'day-badge' + (muted ? ' muted' : '');
-    badge.textContent = day;
-    td.appendChild(badge);
-  }
-
+  /* ===== 핵심 렌더: 날짜 줄을 "그 자리"에서 표시 + 색상(일/토/평일, 외달) 처리 ===== */
   function renderTeam(team, { sheetName, year } = {}){
     const card = document.createElement('section'); card.className = 'card';
-    const bar = document.createElement('div'); bar.className = 'teambar'; bar.textContent = `${team.id}팀`; card.appendChild(bar);
+    const bar  = document.createElement('div'); bar.className = 'teambar'; bar.textContent = `${team.id}팀`; card.appendChild(bar);
 
     const wrap  = document.createElement('div'); wrap.className = 'table-wrap';
     const table = document.createElement('table');
 
-    const month = parseMonth(sheetName);
+    const month    = parseMonth(sheetName);
     const lastDay  = daysInMonth(year, month);
     const firstDow = new Date(year, month-1, 1).getDay();
 
-    let dayCounter = 1;   // 상단 회색 전폭 "N일(요일)" 줄 자동 채움용
-    let weekIdx    = -1;  // 주 인덱스 (작은 숫자줄 발견 시 증가)
+    let dayCounter = 1;   // 전폭 회색 빈줄 → 'N일(요일)' 자동 채움용
+    let weekIdx    = -1;  // 작은 날짜숫자 줄을 만날 때마다 +1
 
-    // 주/요일 칸당 배지는 1번만 찍기 위한 기록
-    const badgeDone = new Set(); // key = `${weekIdx}-${c}`
-
-    // 병합 반영한 그리드 구성
+    // 병합 반영한 그리드
     const grid = Array.from({length: team.rows}, () => Array(team.cols).fill(null));
-    for(const cell of team.cells){
+    for (const cell of team.cells){
       const r0 = cell.r - 1, c0 = cell.c - 1;
       grid[r0][c0] = cell;
       const rs = cell.rowspan || 1, cs = cell.colspan || 1;
-      for(let r=r0; r<r0+rs; r++) for(let c=c0; c<c0+cs; c++){
-        if(r===r0 && c===c0) continue; grid[r][c] = 'skip';
+      for (let r=r0; r<r0+rs; r++){
+        for (let c=c0; c<c0+cs; c++){
+          if (r===r0 && c===c0) continue;
+          grid[r][c] = 'skip';
+        }
       }
     }
 
-    for(let r=0; r<team.rows; r++){
+    for (let r=0; r<team.rows; r++){
       const tr = document.createElement('tr');
-      const weekNumberRow = isWeekNumberRow(grid[r], team.cols);
-      if(weekNumberRow) weekIdx++; // 이 줄은 작은 숫자줄
 
-      for(let c=0; c<team.cols; c++){
+      const weekNumberRow = isWeekNumberRow(grid[r], team.cols);
+      if (weekNumberRow) weekIdx++;
+
+      for (let c=0; c<team.cols; c++){
         const cell = grid[r][c];
-        if(cell === 'skip') continue;
+        if (cell === 'skip') continue;
 
         const td = document.createElement('td');
 
-        if(cell){
-          if(cell.rowspan > 1) td.rowSpan = cell.rowspan;
-          if(cell.colspan > 1) td.colSpan = cell.colspan;
-          if(cell.bg) td.style.backgroundColor = cell.bg;
+        if (cell){
+          if (cell.rowspan > 1) td.rowSpan = cell.rowspan;
+          if (cell.colspan > 1) td.colSpan = cell.colspan;
+          if (cell.bg) td.style.backgroundColor = cell.bg;
 
           const textNow = visibleText(cell);
 
-          // 0) 작은 숫자줄은 **내용을 숨김** (숫자 자체는 표시하지 않음)
-          if (weekNumberRow) {
-            td.textContent = ''; // 줄 레이아웃만 유지
-          } else {
-            // 1) 일반 데이터 렌더 (부분 글자색 지원)
-            if(cell.html && textNow !== '') td.innerHTML = cell.html;
-            else { if(cell.fc) td.style.color = cell.fc; td.textContent = textNow; }
+          if (weekNumberRow){
+            // 날짜 숫자를 이 줄에서 그대로 보이게 한다
+            if (/^\d{1,2}$/.test(textNow)){
+              const pos     = (weekIdx * 7) + c - firstDow + 1; // 이 칸이 가리키는 "이번달 기준" 날짜
+              const inMonth = (pos >= 1 && pos <= lastDay);
 
-            // 2) "전폭 회색 줄"에 내용이 비어있으면 'N일(요일)' 자동 기입
+              // 실제 요일 계산(외달 포함)
+              let dow;
+              if (inMonth) {
+                dow = new Date(year, month-1, pos).getDay();
+              } else if (pos < 1) {
+                const prevLast = daysInMonth(year, month-1);
+                dow = new Date(year, month-2, prevLast + pos).getDay();
+              } else {
+                dow = new Date(year, month, pos - lastDay).getDay();
+              }
+
+              td.textContent   = textNow;
+              td.style.textAlign  = 'center';
+              td.style.fontWeight = inMonth ? '700' : '600';
+              td.style.color =
+                inMonth
+                  ? (dow === 0 ? '#d11'      // 일: 빨강
+                      : dow === 6 ? '#1d4ed8' // 토: 파랑
+                      : '#111827')            // 평일: 진한 검정
+                  : '#9ca3af';                // 외달: 연회색
+            } else {
+              // 숫자가 아닌 경우는 기본 표시
+              if (cell.html && textNow !== '') td.innerHTML = cell.html;
+              else { if (cell.fc) td.style.color = cell.fc; td.textContent = textNow; }
+            }
+
+          } else {
+            // 일반 데이터 줄
+            if (cell.html && textNow !== '') td.innerHTML = cell.html;
+            else { if (cell.fc) td.style.color = cell.fc; td.textContent = textNow; }
+
+            // 전폭 회색 + 비어있음 → 'N일(요일)' 자동 표기(기존 기능 유지)
             const colspan = cell.colspan || 1;
             const looksEmpty = (textNow === '');
             const nearFullWidth = (team.cols - colspan) <= 1;
-            if(looksEmpty && nearFullWidth && isGrayColor(cell.bg)){
-              const maxDay = lastDay;
-              if(dayCounter <= maxDay){
+            if (looksEmpty && nearFullWidth && isGrayColor(cell.bg)){
+              if (dayCounter <= lastDay){
                 td.textContent = `${dayCounter}일(${dowKR(year, month, dayCounter)})`;
                 td.style.fontWeight = '700';
               }
               dayCounter++;
             }
-
-            // 3) 각 주/요일 칸에 **배지 1번만** 표시
-            const pos = (weekIdx >= 0) ? ((weekIdx * 7) + c - firstDow + 1) : NaN;
-            if (!isNaN(pos)) {
-              const key = `${weekIdx}-${c}`;
-              if (!badgeDone.has(key) && (cell.colspan || 1) >= 1) {
-                const inMonth = (pos >= 1 && pos <= lastDay);
-                const day = inMonth ? pos
-                          : (pos < 1 ? (new Date(year, month-1, 0).getDate() + pos)
-                                     : (pos - lastDay));
-                addDayBadge(td, day, !inMonth);
-                badgeDone.add(key);
-              }
-            }
           }
-        }else{
+
+        } else {
           td.textContent = '';
         }
         tr.appendChild(td);
