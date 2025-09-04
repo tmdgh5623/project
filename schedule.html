@@ -5,69 +5,118 @@
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>월간 스케줄</title>
 <style>
-  html, body { height:100%; margin:0; overflow:hidden; font-family:system-ui,-apple-system,Segoe UI,Roboto,'Noto Sans KR',sans-serif; color:#222; }
+  /* 바깥(문서) 스크롤 제거 */
+  html, body { height:100%; margin:0; overflow:hidden; }
 
-  .nav{ background:#2c3e50; color:#fff; padding:10px; display:flex; justify-content:flex-end; gap:10px; position:sticky; top:0; z-index:1000; }
-  .nav button{ background:#fff; color:#000; border:none; border-radius:4px; padding:6px 12px; cursor:pointer; }
+  /* ===== 공통 네비(월별 대상처 리스트와 동일) ===== */
+  .nav {
+    background:#2c3e50; color:#fff;
+    padding:10px;
+    display:flex; justify-content:flex-end; gap:10px;
+    position:sticky; top:0; z-index:1000;
+  }
+  .nav button {
+    background:#fff; color:#000; border:none; border-radius:4px;
+    padding:6px 12px; cursor:pointer;
+  }
 
-  #top-bar{ background:#f0f0f0; border-bottom:1px solid #ddd; padding:8px 15px; display:flex; align-items:center; gap:10px; position:sticky; top:0; z-index:900; }
+  /* ===== 상단 툴바(월별 대상처 리스트의 #top-bar 동일) ===== */
+  #top-bar{
+    background:#f0f0f0;
+    padding:8px 15px;
+    display:flex; align-items:center; gap:10px;
+    position:sticky; top:0; z-index:900;   /* JS가 실제 top 값으로 덮어씀 */
+    border-bottom:1px solid #ddd;
+  }
   #top-bar h1{ font-size:18px; margin:0; }
-  #top-bar select, #top-bar button{ padding:5px 10px; font-size:14px; border:1px solid #dcdcdc; border-radius:8px; background:#fff; }
+  #top-bar select, #top-bar button{
+    padding:5px 10px; font-size:14px;
+    border:1px solid #dcdcdc; border-radius:8px; background:#fff;
+  }
   #status{ color:#666; font-size:13px; margin-left:4px; }
 
-  .page{ overflow:auto; padding:12px 14px 16px; box-sizing:border-box; height:calc(100vh - 96px); }
+  /* ===== 컨텐츠 영역: 이 영역만 스크롤 (높이는 JS로 계산) ===== */
+  .page{
+    overflow:auto;
+    padding:12px 14px 16px;
+    box-sizing:border-box;
+    height:calc(100vh - 96px); /* 초기값(임시), JS가 정확히 재설정 */
+  }
 
-  .grid{ display:grid; grid-template-columns:1fr 1fr; gap:14px; }
-  @media (max-width:980px){ .grid{ grid-template-columns:1fr; } }
+  /* 2열 그리드 */
+  .grid{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:14px;
+  }
+  @media (max-width:980px){
+    .grid{ grid-template-columns:1fr; }
+  }
 
-  .card{ border:1px solid #e5e7eb; border-radius:12px; overflow:hidden; background:#fff; box-shadow:0 1px 4px rgba(0,0,0,.04); }
-  .teambar{ background:#e9eef5; border-bottom:1px solid #dbe2ea; color:#1f2937; font-size:12px; font-weight:700; letter-spacing:.2px; padding:8px 12px; }
-
+  /* 카드 & 표 */
+  .card{
+    border:1px solid #e5e7eb;
+    border-radius:12px;
+    overflow:hidden;
+    background:#fff;
+    box-shadow:0 1px 4px rgba(0,0,0,.04);
+  }
   .table-wrap{ overflow:auto; }
   table{ border-collapse:collapse; width:100%; table-layout:fixed; }
-  td{ border:1px solid #e6e6e6; padding:3px 6px; vertical-align:top; word-break:break-word; font-size:12px; line-height:1.15; position:relative; }
-
-  /* 좌상단 일자 배지 */
-  .day-badge{ position:absolute; top:3px; left:4px; font-size:11px; font-weight:700; line-height:1; color:#111827; opacity:.95; pointer-events:none; user-select:none; }
-  .day-badge.muted{ color:#9ca3af; font-weight:600; }
+  td{
+    border:1px solid #e6e6e6;
+    padding:3px 6px;
+    vertical-align:top;
+    word-break:break-word;
+    font-size:12px;
+    line-height:1.15;
+  }
 </style>
 </head>
 <body>
-  <div class="nav" id="nav">
-    <button onclick="location.href='index.html'">홈</button>
-    <button onclick="location.href='monthly.html'">월별 대상처 리스트</button>
-    <button onclick="location.href='map.html'">지도 보기</button>
-    <button onclick="location.href='schedule.html'">스케줄</button>
-  </div>
 
-  <div id="top-bar">
-    <h1>월간 스케줄</h1>
-    <label for="sheetSelect"><strong>월 선택:</strong></label>
-    <select id="sheetSelect"></select>
-    <button id="refreshBtn">새로고침</button>
-    <span id="status"></span>
-  </div>
+<!-- 공통 네비 -->
+<div class="nav" id="nav">
+  <button onclick="location.href='index.html'">홈</button>
+  <button onclick="location.href='monthly.html'">월별 대상처 리스트</button>
+  <button onclick="location.href='map.html'">지도 보기</button>
+  <button onclick="location.href='schedule.html'">스케줄</button>
+</div>
 
-  <div class="page" id="page">
-    <div id="grid" class="grid"></div>
-  </div>
+<!-- 상단 툴바 -->
+<div id="top-bar">
+  <h1>월간 스케줄</h1>
+  <label for="sheetSelect"><strong>월 선택:</strong></label>
+  <select id="sheetSelect"></select>
+  <button id="refreshBtn">새로고침</button>
+  <span id="status"></span>
+</div>
+
+<!-- 이 아래만 스크롤 -->
+<div class="page" id="page">
+  <div id="grid" class="grid"></div>
+</div>
 
 <script>
-  /* ===== 레이아웃 ===== */
+  // ===== 레이아웃: 네비/툴바 실제 높이로 .page 높이 계산 (바깥 스크롤 제거) =====
   function relayout(){
-    const nav  = document.getElementById('nav');
-    const top  = document.getElementById('top-bar');
-    const page = document.getElementById('page');
-    const navH = nav ? nav.offsetHeight : 0;
-    const topH = top ? top.offsetHeight : 0;
+    const nav   = document.getElementById('nav');
+    const top   = document.getElementById('top-bar');
+    const page  = document.getElementById('page');
+    const navH  = nav ? nav.offsetHeight : 0;
+    const topH  = top ? top.offsetHeight : 0;
+
+    // 툴바 sticky 기준을 네비 높이에 맞춤
     top.style.top = navH + 'px';
+    // 컨텐츠 영역 높이를 정확히 계산
     page.style.height = `calc(100vh - ${navH + topH}px)`;
   }
   window.addEventListener('load', relayout);
   window.addEventListener('resize', relayout);
 
-  /* ===== 데이터 ===== */
+  // ====== 데이터 렌더 ======
   const api = (qs) => `/api/schedule${qs ? ('?' + qs) : ''}`;
+
   const $select  = document.getElementById('sheetSelect');
   const $refresh = document.getElementById('refreshBtn');
   const $grid    = document.getElementById('grid');
@@ -76,216 +125,69 @@
   const now = new Date();
   const initMonth = (now.getMonth() + 1) + '월';
 
-  let renderAborter = null;
-  let changeTimer = null;
-
   init().catch(showError);
 
   async function init(){
-    // 시트 목록(5분 캐시)
-    let sheets = null;
-    try{
-      const cached = JSON.parse(sessionStorage.getItem('sheets:v1') || 'null');
-      if (cached && Date.now() - cached.t < 5*60*1000) sheets = cached.list;
-    }catch(_){}
-    if (!sheets) {
-      const j = await fetchJsonRetry(api('mode=sheets'));
-      sheets = j.sheets || [];
-      sessionStorage.setItem('sheets:v1', JSON.stringify({ t: Date.now(), list: sheets }));
-    }
-
+    const sheets = await fetchJson(api('mode=sheets')).then(r => r.sheets || []);
     $select.innerHTML = sheets.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
-    $select.value = sheets.includes(initMonth) ? initMonth : (sheets[0] || '1월');
+    const use = sheets.includes(initMonth) ? initMonth : (sheets[0] || '1월');
+    $select.value = use;
 
-    await render($select.value);
-
-    $select.addEventListener('change', () => {
-      clearTimeout(changeTimer);
-      changeTimer = setTimeout(() => render($select.value), 250);
-    });
+    await render(use);
+    $select.addEventListener('change', () => render($select.value));
     $refresh.addEventListener('click', () => render($select.value));
   }
 
   async function render(sheetName){
-    if (renderAborter) renderAborter.abort();
-    renderAborter = new AbortController();
     try{
       setLoading(`${sheetName} 불러오는 중…`);
-      const data = await fetchJsonRetry(
-        api(new URLSearchParams({ mode:'month', sheet: sheetName }).toString()),
-        { signal: renderAborter.signal }
-      );
+      const url = api(new URLSearchParams({ mode:'month', sheet: sheetName }).toString());
+      const data = await fetchJson(url);
       if(!data.ok) throw new Error(data.error || 'API 오류');
 
       $grid.innerHTML = '';
-      const year = data.year || (new Date()).getFullYear();
       for(const team of data.teams){
-        $grid.appendChild(renderTeam(team, { sheetName, year }));
+        $grid.appendChild(renderTeamTable(team));
       }
       setLoading('');
-      relayout();
+      relayout(); // 렌더 후에도 한 번 더(행이 늘면 툴바 높이가 변할 수 있음)
     }catch(e){
-      if (e.name === 'AbortError') return;
       showError(e);
     }
   }
 
-  /* ===== 네트워크 유틸: 429/503 재시도 + Abort ===== */
-  async function fetchJsonRetry(url, { retries = 5, signal } = {}){
-    let attempt = 0;
-    while (true){
-      try{
-        const r = await fetch(url, { cache:'no-store', signal });
-        if (r.ok) return r.json();
-        if (r.status === 429 || r.status === 503){
-          attempt++;
-          if (attempt > retries) throw new Error(`HTTP ${r.status}`);
-          const wait = Math.min(30000, 500 * Math.pow(2, attempt-1) + Math.random()*500);
-          setLoading(`요청 한도(HTTP ${r.status})… ${Math.round(wait/1000)}초 후 재시도`);
-          await new Promise(res => setTimeout(res, wait));
-          continue;
-        }
-        throw new Error(`HTTP ${r.status}`);
-      }catch(e){
-        if (e.name === 'AbortError') throw e;
-        attempt++;
-        if (attempt > retries) throw e;
-        const wait = Math.min(30000, 500 * Math.pow(2, attempt-1) + Math.random()*500);
-        setLoading(`네트워크 재시도 중… ${Math.round(wait/1000)}초`);
-        await new Promise(res => setTimeout(res, wait));
-      }
-    }
-  }
-
-  /* ===== 렌더 유틸 ===== */
-  function parseMonth(sheetName){
-    const m = parseInt(String(sheetName).replace(/\D+/g,''),10);
-    return isNaN(m) ? (new Date().getMonth()+1) : m;
-  }
-  function daysInMonth(y, m){ return new Date(y, m, 0).getDate(); }
-  function dowKR(y,m,d){ return ['일','월','화','수','목','금','토'][new Date(y, m-1, d).getDay()]; }
-
-  function isGrayColor(c){
-    if(!c) return false;
-    c = String(c).trim().toLowerCase();
-    const common = ['#eee','#e6e6e6','#e5e7eb','#f0f0f0','#dddddd','#dcdcdc','#ececec','#efefef','#e9eef5','#f3f4f6','#e0e0e0','#cccccc'];
-    if(common.some(x => c.startsWith(x))) return true;
-    const m = c.match(/rgba?\((\d+)[,\s]+(\d+)[,\s]+(\d+)/);
-    if(m){
-      const r=+m[1], g=+m[2], b=+m[3];
-      const avg = (r+g+b)/3, maxDiff = Math.max(Math.abs(r-avg), Math.abs(g-avg), Math.abs(b-avg));
-      return avg >= 200 && maxDiff <= 10;
-    }
-    return false;
-  }
-
-  function visibleText(cell){
-    if(cell?.html){
-      return String(cell.html).replace(/<br\s*\/?>/gi,' ').replace(/&nbsp;/gi,' ').replace(/<[^>]*>/g,'').trim();
-    }
-    return String(cell?.text ?? '').trim();
-  }
-
-  function isWeekNumberRow(rowCells, cols){
-    let countDigits = 0, countCells = 0;
-    for(let c=0; c<cols; c++){
-      const cell = rowCells[c];
-      if(cell === 'skip') continue;
-      countCells++;
-      const t = visibleText(cell);
-      if(/^\d{1,2}$/.test(t)) countDigits++;
-    }
-    return countCells > 0 && countDigits >= Math.max(5, Math.floor(cols*0.6));
-  }
-
-  function addDayBadge(td, day, muted=false){
-    const badge = document.createElement('span');
-    badge.className = 'day-badge' + (muted ? ' muted' : '');
-    badge.textContent = day;
-    td.appendChild(badge);
-  }
-
-  function renderTeam(team, { sheetName, year } = {}){
-    const card = document.createElement('section'); card.className = 'card';
-    const bar = document.createElement('div'); bar.className = 'teambar'; bar.textContent = `${team.id}팀`; card.appendChild(bar);
-
-    const wrap  = document.createElement('div'); wrap.className = 'table-wrap';
+  function renderTeamTable(team){
+    const card = document.createElement('section');
+    card.className = 'card';
+    const wrap = document.createElement('div');
+    wrap.className = 'table-wrap';
     const table = document.createElement('table');
-
-    const month = parseMonth(sheetName);
-    const lastDay = daysInMonth(year, month);
-    const firstDow = new Date(year, month-1, 1).getDay();
-    let dayCounter = 1;
-    let weekIdx   = -1;
 
     const grid = Array.from({length: team.rows}, () => Array(team.cols).fill(null));
     for(const cell of team.cells){
       const r0 = cell.r - 1, c0 = cell.c - 1;
       grid[r0][c0] = cell;
       const rs = cell.rowspan || 1, cs = cell.colspan || 1;
-      for(let r=r0; r<r0+rs; r++) for(let c=c0; c<c0+cs; c++){
-        if(r===r0 && c===c0) continue; grid[r][c] = 'skip';
+      for(let r=r0; r<r0+rs; r++){
+        for(let c=c0; c<c0+cs; c++){
+          if(r===r0 && c===c0) continue;
+          grid[r][c] = 'skip';
+        }
       }
     }
 
     for(let r=0; r<team.rows; r++){
       const tr = document.createElement('tr');
-      const weekNumberRow = isWeekNumberRow(grid[r], team.cols);
-      if(weekNumberRow) weekIdx++;
-
       for(let c=0; c<team.cols; c++){
         const cell = grid[r][c];
         if(cell === 'skip') continue;
-
         const td = document.createElement('td');
-
         if(cell){
           if(cell.rowspan > 1) td.rowSpan = cell.rowspan;
           if(cell.colspan > 1) td.colSpan = cell.colspan;
-          if(cell.bg) td.style.backgroundColor = cell.bg;
-
-          const textNow = visibleText(cell);
-          const isTwoDigitNumber = /^\d{1,2}$/.test(textNow);
-
-          // === 핵심 수정: 날짜 숫자(01~31)는 리치HTML 무시하고 텍스트로 강제 렌더 ===
-          if (isTwoDigitNumber) {
-            td.textContent = textNow; // 인라인 색상(span) 제거
-          } else if (cell.html && textNow !== '') {
-            td.innerHTML = cell.html; // 부분 글자색이 필요한 일반 셀만 HTML 사용
-          } else {
-            if(cell.fc) td.style.color = cell.fc;
-            td.textContent = textNow;
-          }
-
-          // 빈 전폭 회색 줄이면 'N일(요일)' 자동 생성
-          const colspan = cell.colspan || 1;
-          const looksEmpty = (textNow === '');
-          const nearFullWidth = (team.cols - colspan) <= 1;
-          if(looksEmpty && nearFullWidth && isGrayColor(cell.bg)){
-            if(dayCounter <= lastDay){
-              td.textContent = `${dayCounter}일(${dowKR(year, month, dayCounter)})`;
-              td.style.fontWeight = '700';
-            }
-            dayCounter++;
-          }
-
-          // 숫자줄 가시성 보정(당월 진하게, 외달 연하게)
-          if (isTwoDigitNumber){
-            const pos = (weekIdx >= 0) ? ((weekIdx * 7) + c - firstDow + 1) : NaN;
-            const inMonth = (pos >= 1 && pos <= lastDay);
-            td.style.color = inMonth ? '#111827' : '#9ca3af';
-            td.style.fontWeight = inMonth ? '700' : '600';
-            td.style.textAlign = 'center';
-          }
-
-          // 상단 배지(내용행에만)
-          if (!weekNumberRow){
-            const pos = (weekIdx >= 0) ? ((weekIdx * 7) + c - firstDow + 1) : NaN;
-            if (!isNaN(pos) && (cell.colspan || 1) === 1){
-              const inMonth = (pos >= 1 && pos <= lastDay);
-              addDayBadge(td, inMonth ? pos : (pos < 1 ? (new Date(year, month-1, 0).getDate() + pos) : (pos - lastDay)), !inMonth);
-            }
-          }
+          if(cell.bg) td.style.backgroundColor = cell.bg; // 배경색
+          if(cell.fc) td.style.color = cell.fc;           // 글자색
+          td.textContent = cell.text ?? '';
         }else{
           td.textContent = '';
         }
@@ -299,10 +201,15 @@
     return card;
   }
 
-  /* ===== 공통 ===== */
+  async function fetchJson(url){
+    const r = await fetch(url, { cache:'no-store' });
+    if(!r.ok) throw new Error(`HTTP ${r.status}`);
+    return r.json();
+  }
   function setLoading(msg){ $status.textContent = msg || ''; }
   function showError(e){ console.error(e); setLoading(`오류: ${e?.message || e}`); }
   function esc(s){ return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
 </script>
 </body>
 </html>
+
