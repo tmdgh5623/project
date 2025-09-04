@@ -109,8 +109,8 @@
     const navH = nav ? nav.offsetHeight : 0;
     const topH = top ? top.offsetHeight : 0;
 
-    top.style.top = navH + 'px';                               // sticky 기준
-    page.style.height = `calc(100vh - ${navH + topH}px)`;      // 내부 높이
+    top.style.top = navH + 'px';
+    page.style.height = `calc(100vh - ${navH + topH}px)`;
   }
   window.addEventListener('load', relayout);
   window.addEventListener('resize', relayout);
@@ -146,21 +146,41 @@
       if(!data.ok) throw new Error(data.error || 'API 오류');
 
       $grid.innerHTML = '';
+      const year = data.year || (new Date()).getFullYear(); // API에 year가 없으면 올해로 가정
       for(const team of data.teams){
-        $grid.appendChild(renderTeam(team));
+        $grid.appendChild(renderTeam(team, { sheetName, year }));
       }
       setLoading('');
-      relayout(); // 렌더 후 높이 재계산
+      relayout();
     }catch(e){
       showError(e);
     }
   }
 
-  function renderTeam(team){
+  /* ===== 일자 자동 표기 보조 함수 ===== */
+  function parseMonth(sheetName){
+    const m = parseInt(String(sheetName).replace(/\D+/g,''),10);
+    return isNaN(m) ? (new Date().getMonth()+1) : m;
+  }
+  function daysInMonth(year, month){ return new Date(year, month, 0).getDate(); }
+  function dowKR(y,m,d){ return ['일','월','화','수','목','금','토'][new Date(y, m-1, d).getDay()]; }
+  function isGrayColor(c){
+    if(!c) return false;
+    c = c.toLowerCase();
+    // 회색 계열 대략 탐지 (시트 변환 색이 조금 달라도 잡히게 폭넓게)
+    return ['#eee','#e6e6e6','#e5e7eb','#f0f0f0','#dddddd','#dcdcdc','#ececec','#efefef','#e9eef5'].some(g => c.startsWith(g));
+  }
+  function hasAnyText(cell){
+    if(!cell) return false;
+    if(cell.html && cell.html.trim() !== '') return true;
+    if((cell.text ?? '').toString().trim() !== '') return true;
+    return false;
+  }
+
+  function renderTeam(team, { sheetName, year } = {}){
     const card = document.createElement('section');
     card.className = 'card';
 
-    // 팀 라벨(요일 위 한 줄)
     const bar = document.createElement('div');
     bar.className = 'teambar';
     bar.textContent = `${team.id}팀`;
@@ -170,7 +190,12 @@
     wrap.className = 'table-wrap';
     const table = document.createElement('table');
 
-    // 그리드 구성 (null=빈칸, 'skip'=병합 내부)
+    // 팀 내 날짜 카운터 준비
+    const month = parseMonth(sheetName);
+    const lastDay = daysInMonth(year, month);
+    let dayCounter = 1;
+
+    // 그리드 구성
     const grid = Array.from({length: team.rows}, () => Array(team.cols).fill(null));
     for(const cell of team.cells){
       const r0 = cell.r - 1, c0 = cell.c - 1;
@@ -195,12 +220,25 @@
         if(cell){
           if(cell.rowspan > 1) td.rowSpan = cell.rowspan;
           if(cell.colspan > 1) td.colSpan = cell.colspan;
-          if(cell.bg) td.style.backgroundColor = cell.bg;     // 배경색
-          if(cell.html){                                      // 부분 글자색 포함 HTML 우선
+          if(cell.bg) td.style.backgroundColor = cell.bg;
+
+          // ① 원 데이터가 HTML을 주면 그대로
+          if(cell.html && cell.html.trim() !== ''){
             td.innerHTML = cell.html;
           }else{
-            if(cell.fc) td.style.color = cell.fc;             // 셀 단색 폰트
-            td.textContent = cell.text ?? '';
+            if(cell.fc) td.style.color = cell.fc;
+            td.textContent = (cell.text ?? '').toString();
+          }
+
+          // ② "회색 + 전폭 병합 + 내용 없음"이면 일자 자동 표기
+          const isFullWidth = (cell.colspan || 1) >= team.cols;
+          const empty = !hasAnyText(cell);
+          if(empty && isFullWidth && isGrayColor(cell.bg)){
+            if(dayCounter <= lastDay){
+              td.textContent = `${dayCounter}일(${dowKR(year, month, dayCounter)})`;
+              td.style.fontWeight = '700';
+            }
+            dayCounter++; // 다음 회색줄은 다음 날
           }
         }else{
           td.textContent = '';
