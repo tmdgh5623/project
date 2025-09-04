@@ -228,71 +228,77 @@
       }
     }
 
-    for(let r=0; r<team.rows; r++){
-      const tr = document.createElement('tr');
-      const weekNumberRow = isWeekNumberRow(grid[r], team.cols);
-      if(weekNumberRow) weekIdx++;
+for(let r=0; r<team.rows; r++){
+  const tr = document.createElement('tr');
+  const weekNumberRow = isWeekNumberRow(grid[r], team.cols);
+  if(weekNumberRow) weekIdx++;
 
-      for(let c=0; c<team.cols; c++){
-        const cell = grid[r][c];
-        if(cell === 'skip') continue;
+  for(let c=0; c<team.cols; c++){
+    const cell = grid[r][c];
+    if(cell === 'skip') continue;
 
-        const td = document.createElement('td');
+    const td = document.createElement('td');
 
-        if(cell){
-          if(cell.rowspan > 1) td.rowSpan = cell.rowspan;
-          if(cell.colspan > 1) td.colSpan = cell.colspan;
-          if(cell.bg) td.style.backgroundColor = cell.bg;
+    if(cell){
+      if(cell.rowspan > 1) td.rowSpan = cell.rowspan;
+      if(cell.colspan > 1) td.colSpan = cell.colspan;
+      if(cell.bg) td.style.backgroundColor = cell.bg;
 
-          const textNow = visibleText(cell);
-          const isTwoDigitNumber = /^\d{1,2}$/.test(textNow);
+      const textNow = visibleText(cell);
+      const isDay = !!cell.day || /^\d{1,2}$/.test(textNow);
 
-          // === 핵심 수정: 날짜 숫자(01~31)는 리치HTML 무시하고 텍스트로 강제 렌더 ===
-          if (isTwoDigitNumber) {
-            td.textContent = textNow; // 인라인 색상(span) 제거
-          } else if (cell.html && textNow !== '') {
-            td.innerHTML = cell.html; // 부분 글자색이 필요한 일반 셀만 HTML 사용
-          } else {
-            if(cell.fc) td.style.color = cell.fc;
-            td.textContent = textNow;
-          }
-
-          // 빈 전폭 회색 줄이면 'N일(요일)' 자동 생성
-          const colspan = cell.colspan || 1;
-          const looksEmpty = (textNow === '');
-          const nearFullWidth = (team.cols - colspan) <= 1;
-          if(looksEmpty && nearFullWidth && isGrayColor(cell.bg)){
-            if(dayCounter <= lastDay){
-              td.textContent = `${dayCounter}일(${dowKR(year, month, dayCounter)})`;
-              td.style.fontWeight = '700';
-            }
-            dayCounter++;
-          }
-
-          // 숫자줄 가시성 보정(당월 진하게, 외달 연하게)
-          if (isTwoDigitNumber){
-            const pos = (weekIdx >= 0) ? ((weekIdx * 7) + c - firstDow + 1) : NaN;
-            const inMonth = (pos >= 1 && pos <= lastDay);
-            td.style.color = inMonth ? '#111827' : '#9ca3af';
-            td.style.fontWeight = inMonth ? '700' : '600';
-            td.style.textAlign = 'center';
-          }
-
-          // 상단 배지(내용행에만)
-          if (!weekNumberRow){
-            const pos = (weekIdx >= 0) ? ((weekIdx * 7) + c - firstDow + 1) : NaN;
-            if (!isNaN(pos) && (cell.colspan || 1) === 1){
-              const inMonth = (pos >= 1 && pos <= lastDay);
-              addDayBadge(td, inMonth ? pos : (pos < 1 ? (new Date(year, month-1, 0).getDate() + pos) : (pos - lastDay)), !inMonth);
-            }
-          }
-        }else{
-          td.textContent = '';
-        }
-        tr.appendChild(td);
+      // === 날짜/일반 셀 렌더 ===
+      if (isDay) {
+        // 날짜는 리치HTML 무시하고 텍스트만(숫자가 흰색으로 숨는 문제 방지)
+        td.textContent = textNow;
+      } else if (cell.html && textNow !== '') {
+        td.innerHTML = cell.html; // 일반 셀은 부분 글자색 반영
+      } else {
+        if(cell.fc) td.style.color = cell.fc;
+        td.textContent = textNow;
       }
-      table.appendChild(tr);
+
+      // ① 빈 전폭 회색 줄 → 'N일(요일)' 자동 기입
+      const colspan = cell.colspan || 1;
+      const looksEmpty = (textNow === '');
+      const nearFullWidth = (team.cols - colspan) <= 1;
+      if(looksEmpty && nearFullWidth && isGrayColor(cell.bg)){
+        if(dayCounter <= lastDay){
+          td.textContent = `${dayCounter}일(${dowKR(year, month, dayCounter)})`;
+          td.style.fontWeight = '700';
+        }
+        dayCounter++;
+      }
+
+      // ② 숫자줄(작은 날짜 숫자들) 가시성 보정: 당월 진하게, 외달 연하게
+      if (isDay){
+        const pos = (weekIdx >= 0) ? ((weekIdx * 7) + c - firstDow + 1) : NaN;
+        const inMonth = (pos >= 1 && pos <= lastDay);
+        td.style.color = inMonth ? '#111827' : '#9ca3af';
+        td.style.fontWeight = inMonth ? '700' : '600';
+        td.style.textAlign = 'center';
+      }
+
+      // ③ 내용행(주번호줄이 아닌 행)엔 좌상단 일자 배지
+      if (!weekNumberRow){
+        const pos = (weekIdx >= 0) ? ((weekIdx * 7) + c - firstDow + 1) : NaN;
+        if (!isNaN(pos) && (cell.colspan || 1) === 1){
+          const inMonth = (pos >= 1 && pos <= lastDay);
+          addDayBadge(
+            td,
+            inMonth ? pos : (pos < 1 ? (new Date(year, month-1, 0).getDate() + pos) : (pos - lastDay)),
+            !inMonth
+          );
+        }
+      }
+
+    } else {
+      td.textContent = '';
     }
+    tr.appendChild(td);
+  }
+  table.appendChild(tr);
+}
 
     wrap.appendChild(table);
     card.appendChild(wrap);
