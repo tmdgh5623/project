@@ -26,11 +26,12 @@
   .table-wrap{ overflow:auto; }
   table{
     border-collapse:separate; border-spacing:0; width:100%; table-layout:fixed;
-    --row-h: 40px;      /* 기본 ‘콘텐츠 행’ 높이 */
-    --weeknum-h: 24px;  /* 작은 날짜 숫자 줄 높이 */
+    /* ↓ 여기 수치로 간격 조절 */
+    --row-h: 26px;      /* 하루(콘텐츠) 행 높이 */
+    --weeknum-h: 16px;  /* 일자(숫자) 줄 높이 */
   }
   tbody tr{ height: var(--row-h); }
-  tr[data-weekrow="1"]{ height: var(--weeknum-h); }
+  tr[data-weekrow="1"]{ height: var(--weeknum-h); }   /* 일자(숫자) 줄만 얇게 */
   tr[data-weekrow="1"] td{ text-align:center; }
 
   /* 기본 테두리는 감춤 → 내용/강한 배경만 테두리 */
@@ -67,8 +68,8 @@
   </div>
 
 <script>
-  /* ===== 설정: 한 주(날짜줄~다음 날짜줄 사이) 목표 ‘콘텐츠 행 개수’ ===== */
-  const TARGET_WEEK_ROWS = 5; // 원본처럼 보이게 5 추천. 필요시 4/6 등으로 조절.
+  /* 한 주(일자줄~다음 일자줄 사이) 목표 ‘콘텐츠 행 개수’ */
+  const TARGET_WEEK_ROWS = 4; // 촘촘함 ↑ (5로 바꾸면 조금 넓어짐)
 
   /* ===== 레이아웃 ===== */
   function relayout(){
@@ -99,7 +100,6 @@
   init().catch(showError);
 
   async function init(){
-    // 시트 목록(5분 캐시)
     let sheets = null;
     try{
       const cached = JSON.parse(sessionStorage.getItem('sheets:v1') || 'null');
@@ -142,7 +142,7 @@
       setLoading('');
       relayout();
 
-      // 주 구간 높이 균일화 → 글자 축소 순서로 실행
+      // 주 구간 균일화 → 글자 축소
       uniformizeAllWeeks();
       shrinkAllText();
     }catch(e){
@@ -235,8 +235,8 @@
     const lastDay  = daysInMonth(year, month);
     const firstDow = new Date(year, month-1, 1).getDay();
 
-    let dayCounter = 1;   // 전폭 회색 빈줄 → 'N일(요일)' 자동 채움용
-    let weekIdx    = -1;  // 작은 날짜 숫자 줄을 만날 때마다 +1
+    let dayCounter = 1;
+    let weekIdx    = -1;
 
     // 병합 반영 그리드
     const grid = Array.from({length: team.rows}, () => Array(team.cols).fill(null));
@@ -271,7 +271,7 @@
           const textNow = visibleText(cell);
 
           if (weekNumberRow){
-            // 날짜 숫자 표시(테두리 없음)
+            // 일자(숫자) 줄
             if (/^\d{1,2}$/.test(textNow)){
               const pos     = (weekIdx * 7) + c - firstDow + 1;
               const inMonth = (pos >= 1 && pos <= lastDay);
@@ -324,12 +324,12 @@
     return card;
   }
 
-  /* ===== 주 높이 균일화: 날짜줄 사이 ‘총 높이’를 동일하게 ===== */
+  /* ===== 주 높이 균일화 ===== */
   function uniformizeAllWeeks(){
     document.querySelectorAll('.table-wrap table').forEach(tbl => {
       const rows = Array.from(tbl.querySelectorAll('tr'));
-      const baseRowH = parseFloat(getComputedStyle(tbl).getPropertyValue('--row-h')) || 40;
-      const targetBlockPx = TARGET_WEEK_ROWS * baseRowH; // 한 주 콘텐츠 총높이
+      const baseRowH = parseFloat(getComputedStyle(tbl).getPropertyValue('--row-h')) || 26;
+      const targetBlockPx = TARGET_WEEK_ROWS * baseRowH;
 
       // 날짜줄 인덱스 수집
       const weekIdxs = rows
@@ -338,7 +338,7 @@
 
       for (let w=0; w<weekIdxs.length; w++){
         const start = weekIdxs[w];
-        const end   = (w+1 < weekIdxs.length) ? weekIdxs[w+1] : rows.length; // 다음 날짜줄 또는 끝
+        const end   = (w+1 < weekIdxs.length) ? weekIdxs[w+1] : rows.length;
         const contentRows = rows.slice(start+1, end);
         if (contentRows.length === 0) continue;
 
@@ -350,7 +350,7 @@
 
   /* ===== 셀 텍스트 자동 축소 ===== */
   function shrinkAllText(){
-    const MIN = 9;   // 최소 글자(px)
+    const MIN = 8;   // 최소 글자(px) — 촘촘하게 보기 위해 8까지 허용
     const MAX = 12;  // 기본 글자(px)
 
     document.querySelectorAll('.table-wrap table').forEach(tbl => {
