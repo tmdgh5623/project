@@ -29,11 +29,15 @@
   @media (max-width:980px){ .grid{ grid-template-columns:1fr; } }
 
   /* 카드/표 */
-  .card{ border:1px solid #e5e7eb; border-radius:12px; overflow:hidden; background:#fff; box-shadow:0 1px 4px rgba(0,0,0,.04); }
-  .teambar{ background:#e9eef5; border-bottom:1px solid #dbe2ea; color:#1f2937; font-size:12px; font-weight:700; letter-spacing:.2px; padding:8px 12px; }
+  .card{ border:1px solid #e5e7eb; border-radius:12px; overflow:hidden; background:#fff;
+         box-shadow:0 1px 4px rgba(0,0,0,.04); display:flex; flex-direction:column; }
+  .teambar{ background:#e9eef5; border-bottom:1px solid #dbe2ea; color:#1f2937;
+            font-size:12px; font-weight:700; letter-spacing:.2px; padding:8px 12px; }
 
-  .table-wrap{ overflow:auto; }
-  table{ border-collapse:separate; border-spacing:0; width:100%; table-layout:fixed; }
+  .table-wrap{ flex:1; overflow:hidden; }           /* 카드 높이를 꽉 채움 */
+  table{ border-collapse:separate; border-spacing:0; width:100%; height:100%; table-layout:fixed; }
+  tbody tr{ height: calc(100% / var(--rows, 37)); } /* 행 높이 균등 분배 */
+
   /* 기본은 테두리 감춤 → 콘텐츠 있는 칸만 .bordered 부여 */
   td{
     border:1px solid transparent;
@@ -42,10 +46,13 @@
     word-break:break-word;
     font-size:12px;
     line-height:1.15;
+    overflow:hidden;                 /* 셀은 절대 커지지 않음 */
   }
   td.bordered{ border-color:#e6e6e6; }       /* 보통 테두리 */
-  td.bordered-strong{ border-color:#cfd4dc; }/* 필요시 더 진하게 쓰고 싶을 때 */
+  td.bordered-strong{ border-color:#cfd4dc; }/* 필요 시 더 진한 테두리 */
 
+  /* 날짜(작은 숫자) 줄용: 중앙 정렬만 지정(색/굵기/표시는 JS에서 계산) */
+  tr[data-weekrow="1"] td{ text-align:center; }
 </style>
 </head>
 <body>
@@ -78,9 +85,16 @@
     const topH = top ? top.offsetHeight : 0;
     top.style.top = navH + 'px';
     page.style.height = `calc(100vh - ${navH + topH}px)`;
+
+    // 2×2 카드가 페이지 세로를 꽉 채우도록 각 카드 높이 계산
+    const grid = document.getElementById('grid');
+    const gap  = parseFloat(getComputedStyle(grid).gap || '14');
+    const pageH = page.clientHeight;
+    const cardH = (pageH - gap) / 2; // 두 줄이니까 gap 한 번만 뺌
+    document.querySelectorAll('.card').forEach(card => { card.style.height = cardH + 'px'; });
   }
   window.addEventListener('load', relayout);
-  window.addEventListener('resize', relayout);
+  window.addEventListener('resize', () => { relayout(); shrinkAllText(); });
 
   /* ===== 데이터 ===== */
   const api = (qs) => `/api/schedule${qs ? ('?' + qs) : ''}`;
@@ -140,6 +154,7 @@
       }
       setLoading('');
       relayout();
+      shrinkAllText();   // 렌더 후 전체 자동 축소 1회
     }catch(e){
       if (e.name === 'AbortError') return;
       showError(e);
@@ -215,7 +230,7 @@
       const t = visibleText(cell);
       if(/^\d{1,2}$/.test(t)) countDigits++;
     }
-    return countCells > 0 && countDigits >= Math.max(5, Math.floor(cols*0.6));
+    return countDigits >= Math.max(5, Math.floor(cols*0.6));
   }
 
   /* ===== 핵심 렌더 ===== */
@@ -225,6 +240,7 @@
 
     const wrap  = document.createElement('div'); wrap.className = 'table-wrap';
     const table = document.createElement('table');
+    table.style.setProperty('--rows', team.rows); // 행 수 전달
 
     const month    = parseMonth(sheetName);
     const lastDay  = daysInMonth(year, month);
@@ -251,7 +267,7 @@
       const tr = document.createElement('tr');
 
       const weekNumberRow = isWeekNumberRow(grid[r], team.cols);
-      if (weekNumberRow) weekIdx++;
+      if (weekNumberRow) { weekIdx++; tr.dataset.weekrow = '1'; }
 
       for (let c=0; c<team.cols; c++){
         const cell = grid[r][c];
@@ -267,26 +283,22 @@
           const textNow = visibleText(cell);
 
           if (weekNumberRow){
-            // 날짜 숫자만 보이고, 테두리는 숨김
+            // 날짜 숫자 표시(테두리 없음)
             if (/^\d{1,2}$/.test(textNow)){
               const pos     = (weekIdx * 7) + c - firstDow + 1;
               const inMonth = (pos >= 1 && pos <= lastDay);
-              // 실제 요일 색상(일/토/평일) + 외달은 연하게
               let dow;
               if (inMonth) dow = new Date(year, month-1, pos).getDay();
               else if (pos < 1) { const prevLast = daysInMonth(year, month-1); dow = new Date(year, month-2, prevLast + pos).getDay(); }
               else { dow = new Date(year, month, pos - lastDay).getDay(); }
 
               td.textContent   = textNow;
-              td.style.textAlign  = 'center';
               td.style.fontWeight = inMonth ? '700' : '600';
               td.style.color =
                 inMonth
                   ? (dow === 0 ? '#d11' : (dow === 6 ? '#1d4ed8' : '#111827'))
                   : '#9ca3af';
-              // 테두리 없음 (지저분함 방지)
             }else{
-              // 숫자가 아닌 경우만 표시(필요시)
               if (cell.html && textNow !== '') td.innerHTML = cell.html;
               else { if (cell.fc) td.style.color = cell.fc; td.textContent = textNow; }
             }
@@ -308,9 +320,9 @@
               dayCounter++;
             }
 
-            // ▼▼▼ 빈 셀은 테두리 없음, 내용/강한배경만 테두리 표시 ▼▼▼
+            // 빈 셀은 테두리 없음, 내용/강한배경만 테두리 표시
             const hasText = (td.textContent && td.textContent.trim() !== '') || (cell.html && visibleText(cell) !== '');
-            const strongBg = cell.bg && !isGrayColor(cell.bg); // 진한 배경(노란 하이라이트 등)
+            const strongBg = cell.bg && !isGrayColor(cell.bg);
             if (hasText || strongBg) td.classList.add('bordered');
           }
 
@@ -325,6 +337,61 @@
     wrap.appendChild(table);
     card.appendChild(wrap);
     return card;
+  }
+
+  /* ===== 셀 텍스트 자동 축소 ===== */
+  function shrinkAllText(){
+    const MIN = 9;      // 최소 글자 크기(px)
+    const MAX = 12;     // 기본 글자 크기(px)
+    const tables = document.querySelectorAll('.table-wrap table');
+
+    tables.forEach(tbl => {
+      // 행 높이가 바뀌었을 수 있으니 먼저 기본 폰트로 초기화
+      tbl.querySelectorAll('td').forEach(td => {
+        td.style.fontSize = MAX + 'px';
+        td.style.lineHeight = '1.15';
+      });
+
+      // 날짜(작은 숫자) 줄은 건너뜀
+      tbl.querySelectorAll('tr:not([data-weekrow="1"]) td').forEach(td => shrinkToFit(td, MIN));
+    });
+  }
+
+  function shrinkToFit(td, minPx){
+    // 내용 없으면 스킵
+    if (!td.textContent.trim() && td.children.length === 0) return;
+
+    const style = getComputedStyle(td);
+    let fs = parseFloat(style.fontSize);
+    if (isNaN(fs)) fs = 12;
+
+    // 여러 줄/가로 넘침을 동시에 고려한 비율 축소
+    const padY = parseFloat(style.paddingTop) + parseFloat(style.paddingBottom);
+    const padX = parseFloat(style.paddingLeft) + parseFloat(style.paddingRight);
+
+    // 임시 래퍼로 실제 크기 측정(가로/세로)
+    const r = document.createRange();
+    r.selectNodeContents(td);
+    const rectBefore = { w: td.scrollWidth, h: td.scrollHeight };
+
+    // 반복(최대 8회) — 충분히 줄여서 들어가게
+    for (let i=0; i<8; i++){
+      const fitH = (td.scrollHeight <= td.clientHeight);
+      const fitW = (td.scrollWidth  <= td.clientWidth );
+      if (fitH && fitW) break;
+
+      const hRatio = td.clientHeight / Math.max(1, td.scrollHeight);
+      const wRatio = td.clientWidth  / Math.max(1, td.scrollWidth);
+      const ratio  = Math.max(0.5, Math.min(hRatio, wRatio)) * 0.98; // 살짝 여유
+      const next   = Math.max(minPx, Math.floor(fs * ratio));
+
+      if (next >= fs) break; // 더 줄일 수 없음
+      fs = next;
+      td.style.fontSize = fs + 'px';
+      td.style.lineHeight = (0.95 + (fs - minPx) * 0.02).toFixed(2); // 폰트가 작아질수록 라인간격도 약간 줄임
+
+      if (fs <= minPx) break;
+    }
   }
 
   /* ===== 공통 ===== */
