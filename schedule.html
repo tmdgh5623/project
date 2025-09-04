@@ -67,7 +67,17 @@
     word-break:break-word;
     font-size:12px;
     line-height:1.15;
+    position: relative; /* ← 배지 위치 기준 */
   }
+
+  /* 일자 배지 */
+  .day-badge{
+    position:absolute; top:3px; left:4px;
+    font-size:11px; font-weight:700; line-height:1;
+    color:#111827; opacity:.95; pointer-events:none;
+    user-select:none;
+  }
+  .day-badge.muted{ color:#9ca3af; font-weight:600; }
 </style>
 </head>
 <body>
@@ -240,6 +250,14 @@
     return countCells > 0 && countDigits >= Math.max(5, Math.floor(cols*0.6));
   }
 
+  // 배지 추가
+  function addDayBadge(td, day, muted=false){
+    const badge = document.createElement('span');
+    badge.className = 'day-badge' + (muted ? ' muted' : '');
+    badge.textContent = day;
+    td.appendChild(badge);
+  }
+
   function renderTeam(team, { sheetName, year } = {}){
     const card = document.createElement('section');
     card.className = 'card';
@@ -291,9 +309,9 @@
           if(cell.html && textNow !== '') td.innerHTML = cell.html;
           else { if(cell.fc) td.style.color = cell.fc; td.textContent = textNow; }
 
-          /* ① 회색 전폭 줄이 비어있으면 'N일(요일)' 자동 기입 */
+          /* ① 빈 전폭 회색 줄 → 'N일(요일)' */
           const colspan = cell.colspan || 1;
-          const looksEmpty = (visibleText(cell) === '');
+          const looksEmpty = (textNow === '');
           const nearFullWidth = (team.cols - colspan) <= 1;
           if(looksEmpty && nearFullWidth && isGrayColor(cell.bg)){
             if(dayCounter <= lastDay){
@@ -303,17 +321,27 @@
             dayCounter++;
           }
 
-          /* ② 날짜 숫자 줄(작은 숫자들) 가시성 강제 */
+          /* ② 숫자줄(작은 숫자) → 가시성 보정 */
           const isTwoDigitNumber = /^\d{1,2}$/.test(textNow);
           if (isTwoDigitNumber && isGrayColor(cell.bg)) {
             const pos = (weekIdx >= 0) ? ((weekIdx * 7) + c - firstDow + 1) : NaN;
             const inMonth = (pos >= 1 && pos <= lastDay);
-            td.style.color = inMonth ? '#111827' : '#9ca3af';  // 이번달 진하게, 외달 연회색
+            td.style.color = inMonth ? '#111827' : '#9ca3af';
             td.style.fontWeight = inMonth ? '700' : '600';
             td.style.textAlign = 'center';
           }
 
-          /* ③ 주 번호 줄 색 보정(백업 로직) */
+          /* ③ 항상 보이는 '일자 배지' (병합되지 않은 1일 칸에 표시, 숫자줄 제외) */
+          if (!weekNumberRow) {
+            const pos = (weekIdx >= 0) ? ((weekIdx * 7) + c - firstDow + 1) : NaN;
+            if (!isNaN(pos) && (cell.colspan || 1) === 1) {
+              const inMonth = (pos >= 1 && pos <= lastDay);
+              if (inMonth) addDayBadge(td, pos, false);
+              else addDayBadge(td, (pos < 1 ? (new Date(year, month-1, 0).getDate() + pos) : (pos - lastDay)), true);
+            }
+          }
+
+          /* ④ 주 번호 줄(백업) */
           if(weekNumberRow){
             const t = textNow;
             if(/^\d{1,2}$/.test(t)){
