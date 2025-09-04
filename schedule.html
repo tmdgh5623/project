@@ -125,21 +125,51 @@
   const now = new Date();
   const initMonth = (now.getMonth() + 1) + '월';
 
+  // 요청 중복 방지용
+  let renderAborter = null;
+  let changeTimer = null;
+
   init().catch(showError);
 
   async function init(){
-    const sheets = await fetchJson(api('mode=sheets')).then(r => r.sheets || []);
+    // 1) 시트 목록: 세션 캐시 5분
+    let sheets = null;
+    try{
+      const cached = JSON.parse(sessionStorage.getItem('sheets:v1') || 'null');
+      if (cached && Date.now() - cached.t < 5*60*1000) sheets = cached.list;
+    }catch(_){}
+
+    if (!sheets) {
+      const j = await fetchJsonRetry(api('mode=sheets'));
+      sheets = j.sheets || [];
+      sessionStorage.setItem('sheets:v1', JSON.stringify({ t: Date.now(), list: sheets }));
+    }
+
+    // 2) 셀렉트 구성 & 기본값
     $select.innerHTML = sheets.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
     $select.value = sheets.includes(initMonth) ? initMonth : (sheets[0] || '1월');
+
     await render($select.value);
-    $select.addEventListener('change', () => render($select.value));
+
+    // 디바운스: 250ms
+    $select.addEventListener('change', () => {
+      clearTimeout(changeTimer);
+      changeTimer = setTimeout(() => render($select.value), 250);
+    });
     $refresh.addEventListener('click',  () => render($select.value));
   }
 
   async function render(sheetName){
+    // 이전 렌더 취소
+    if (renderAborter) renderAborter.abort();
+    renderAborter = new AbortController();
+
     try{
       setLoading(`${sheetName} 불러오는 중…`);
-      const data = await fetchJson(api(new URLSearchParams({ mode:'month', sheet: sheetName }).toString()));
+      const data = await fetchJsonRetry(
+        api(new URLSearchParams({ mode:'month', sheet: sheetName }).toString()),
+        { signal: renderAborter.signal }
+      );
       if(!data.ok) throw new Error(data.error || 'API 오류');
 
       $grid.innerHTML = '';
@@ -150,19 +180,47 @@
       setLoading('');
       relayout();
     }catch(e){
+      if (e.name === 'AbortError') return; // 새 요청으로 교체된 경우 조용히 종료
       showError(e);
     }
   }
 
-  /* ===== 유틸 ===== */
+  /* ===== 네트워크 유틸: 429/503 재시도 + Abort 지원 ===== */
+  async function fetchJsonRetry(url, { retries = 5, signal } = {}){
+    let attempt = 0;
+    while (true){
+      try{
+        const r = await fetch(url, { cache:'no-store', signal });
+        if (r.ok) return r.json();
+
+        // 레이트리밋/일시 장애는 백오프 재시도
+        if (r.status === 429 || r.status === 503){
+          attempt++;
+          if (attempt > retries) throw new Error(`HTTP ${r.status}`);
+          const wait = Math.min(30000, 500 * Math.pow(2, attempt-1) + Math.random()*500);
+          setLoading(`요청 한도(HTTP ${r.status})… ${Math.round(wait/1000)}초 후 재시도`);
+          await new Promise(res => setTimeout(res, wait));
+          continue;
+        }
+        throw new Error(`HTTP ${r.status}`);
+      }catch(e){
+        if (e.name === 'AbortError') throw e;
+        attempt++;
+        if (attempt > retries) throw e;
+        const wait = Math.min(30000, 500 * Math.pow(2, attempt-1) + Math.random()*500);
+        setLoading(`네트워크 재시도 중… ${Math.round(wait/1000)}초`);
+        await new Promise(res => setTimeout(res, wait));
+      }
+    }
+  }
+
+  /* ===== 렌더 유틸 (그대로) ===== */
   function parseMonth(sheetName){
     const m = parseInt(String(sheetName).replace(/\D+/g,''),10);
     return isNaN(m) ? (new Date().getMonth()+1) : m;
   }
   function daysInMonth(y, m){ return new Date(y, m, 0).getDate(); }
   function dowKR(y,m,d){ return ['일','월','화','수','목','금','토'][new Date(y, m-1, d).getDay()]; }
-
-  // 회색 감지(날짜 헤더용)
   function isGrayColor(c){
     if(!c) return false;
     c = String(c).trim().toLowerCase();
@@ -176,20 +234,12 @@
     }
     return false;
   }
-
-  // 보이는 텍스트만 추출
   function visibleText(cell){
     if(cell?.html){
-      return String(cell.html)
-        .replace(/<br\s*\/?>/gi, ' ')
-        .replace(/&nbsp;/gi, ' ')
-        .replace(/<[^>]*>/g, '')
-        .trim();
+      return String(cell.html).replace(/<br\s*\/?>/gi,' ').replace(/&nbsp;/gi,' ').replace(/<[^>]*>/g,'').trim();
     }
     return String(cell?.text ?? '').trim();
   }
-
-  // "주 번호 줄(31 01 02 ... 같은 숫자만 있는 얇은 줄)"인지 감지
   function isWeekNumberRow(rowCells, cols){
     let countDigits = 0, countCells = 0;
     for(let c=0; c<cols; c++){
@@ -206,7 +256,6 @@
     const card = document.createElement('section');
     card.className = 'card';
 
-    // 상단 팀 라벨
     const bar = document.createElement('div');
     bar.className = 'teambar';
     bar.textContent = `${team.id}팀`;
@@ -216,14 +265,12 @@
     wrap.className = 'table-wrap';
     const table = document.createElement('table');
 
-    // 월·요일 정보
     const month = parseMonth(sheetName);
     const lastDay = daysInMonth(year, month);
-    const firstDow = new Date(year, month-1, 1).getDay(); // 0=일
-    let dayCounter = 1;   // 회색 전폭 "N일(요일)" 줄용
-    let weekIdx   = -1;   // 주 번호 줄 인덱스(0부터)
+    const firstDow = new Date(year, month-1, 1).getDay();
+    let dayCounter = 1;
+    let weekIdx   = -1;
 
-    // 그리드 구성
     const grid = Array.from({length: team.rows}, () => Array(team.cols).fill(null));
     for(const cell of team.cells){
       const r0 = cell.r - 1, c0 = cell.c - 1;
@@ -237,18 +284,14 @@
       }
     }
 
-    // 렌더링
     for(let r=0; r<team.rows; r++){
       const tr = document.createElement('tr');
-
-      // 이 행이 "주 번호 줄"인지 먼저 판정
       const weekNumberRow = isWeekNumberRow(grid[r], team.cols);
       if(weekNumberRow) weekIdx++;
 
       for(let c=0; c<team.cols; c++){
         const cell = grid[r][c];
         if(cell === 'skip') continue;
-
         const td = document.createElement('td');
 
         if(cell){
@@ -256,16 +299,10 @@
           if(cell.colspan > 1) td.colSpan = cell.colspan;
           if(cell.bg) td.style.backgroundColor = cell.bg;
 
-          // 데이터 렌더 (html 우선)
           const textNow = visibleText(cell);
-          if(cell.html && textNow !== ''){
-            td.innerHTML = cell.html;
-          }else{
-            if(cell.fc) td.style.color = cell.fc;
-            td.textContent = textNow;
-          }
+          if(cell.html && textNow !== '') td.innerHTML = cell.html;
+          else { if(cell.fc) td.style.color = cell.fc; td.textContent = textNow; }
 
-          // ① 회색 전폭(±1 허용) + 내용 없음 ⇒ "N일(요일)" 자동 표기
           const colspan = cell.colspan || 1;
           const looksEmpty = (visibleText(cell) === '');
           const nearFullWidth = (team.cols - colspan) <= 1;
@@ -277,24 +314,15 @@
             dayCounter++;
           }
 
-          // ② "주 번호 줄"의 숫자 색상: 전달/다음달 옅게, 이번달 진하게
           if(weekNumberRow){
             const t = visibleText(cell);
             if(/^\d{1,2}$/.test(t)){
-              const day = parseInt(t, 10);
-              // 이 칸이 실제 가리키는 날짜(이번달 기준)
               const pos = (weekIdx * 7) + c - firstDow + 1;
               const isCurrMonth = (pos >= 1 && pos <= lastDay);
-              if(isCurrMonth){
-                td.style.color = '#111827';   // 진한 글자
-                td.style.fontWeight = '700';
-              }else{
-                td.style.color = '#9ca3af';   // 옅은 회색
-                td.style.fontWeight = '600';
-              }
+              td.style.color = isCurrMonth ? '#111827' : '#9ca3af';
+              td.style.fontWeight = isCurrMonth ? '700' : '600';
             }
           }
-
         }else{
           td.textContent = '';
         }
@@ -308,14 +336,11 @@
     return card;
   }
 
-  async function fetchJson(url){
-    const r = await fetch(url, { cache:'no-store' });
-    if(!r.ok) throw new Error(`HTTP ${r.status}`);
-    return r.json();
-  }
+  /* ===== 공통 ===== */
   function setLoading(msg){ $status.textContent = msg || ''; }
   function showError(e){ console.error(e); setLoading(`오류: ${e?.message || e}`); }
   function esc(s){ return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
 </script>
+
 </body>
 </html>
