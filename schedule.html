@@ -143,7 +143,7 @@
       if(!data.ok) throw new Error(data.error || 'API 오류');
 
       $grid.innerHTML = '';
-      const year = data.year || (new Date()).getFullYear(); // year 미제공 시 올해
+      const year = data.year || (new Date()).getFullYear();
       for(const team of data.teams){
         $grid.appendChild(renderTeam(team, { sheetName, year }));
       }
@@ -162,7 +162,7 @@
   function daysInMonth(y, m){ return new Date(y, m, 0).getDate(); }
   function dowKR(y,m,d){ return ['일','월','화','수','목','금','토'][new Date(y, m-1, d).getDay()]; }
 
-  // 회색 판정 강화 (HEX, rgb/rgba 모두)
+  // 회색 감지(날짜 헤더용)
   function isGrayColor(c){
     if(!c) return false;
     c = String(c).trim().toLowerCase();
@@ -171,29 +171,42 @@
     const m = c.match(/rgba?\((\d+)[,\s]+(\d+)[,\s]+(\d+)/);
     if(m){
       const r=+m[1], g=+m[2], b=+m[3];
-      const avg = (r+g+b)/3;
-      const maxDiff = Math.max(Math.abs(r-avg), Math.abs(g-avg), Math.abs(b-avg));
-      return avg >= 200 && maxDiff <= 10; // 밝고 채도 낮은 회색
+      const avg = (r+g+b)/3, maxDiff = Math.max(Math.abs(r-avg), Math.abs(g-avg), Math.abs(b-avg));
+      return avg >= 200 && maxDiff <= 10;
     }
     return false;
   }
 
-  // HTML이 “보이는 텍스트” 기준으로 비었는지 검사
-  function htmlLooksEmpty(html){
-    if(!html) return true;
-    const stripped = String(html)
-      .replace(/<br\s*\/?>/gi, ' ')        // 줄바꿈은 공백 취급
-      .replace(/&nbsp;/gi, ' ')            // nbsp 제거
-      .replace(/<[^>]*>/g, '')             // 태그 제거
-      .trim();
-    return stripped === '';
+  // 보이는 텍스트만 추출
+  function visibleText(cell){
+    if(cell?.html){
+      return String(cell.html)
+        .replace(/<br\s*\/?>/gi, ' ')
+        .replace(/&nbsp;/gi, ' ')
+        .replace(/<[^>]*>/g, '')
+        .trim();
+    }
+    return String(cell?.text ?? '').trim();
+  }
+
+  // "주 번호 줄(31 01 02 ... 같은 숫자만 있는 얇은 줄)"인지 감지
+  function isWeekNumberRow(rowCells, cols){
+    let countDigits = 0, countCells = 0;
+    for(let c=0; c<cols; c++){
+      const cell = rowCells[c];
+      if(cell === 'skip') continue;
+      countCells++;
+      const t = visibleText(cell);
+      if(/^\d{1,2}$/.test(t)) countDigits++;
+    }
+    return countCells > 0 && countDigits >= Math.max(5, Math.floor(cols*0.6));
   }
 
   function renderTeam(team, { sheetName, year } = {}){
     const card = document.createElement('section');
     card.className = 'card';
 
-    // 상단 팀 라벨 (디자인 유지)
+    // 상단 팀 라벨
     const bar = document.createElement('div');
     bar.className = 'teambar';
     bar.textContent = `${team.id}팀`;
@@ -203,10 +216,12 @@
     wrap.className = 'table-wrap';
     const table = document.createElement('table');
 
-    // 날짜 카운터 준비
+    // 월·요일 정보
     const month = parseMonth(sheetName);
     const lastDay = daysInMonth(year, month);
-    let dayCounter = 1;
+    const firstDow = new Date(year, month-1, 1).getDay(); // 0=일
+    let dayCounter = 1;   // 회색 전폭 "N일(요일)" 줄용
+    let weekIdx   = -1;   // 주 번호 줄 인덱스(0부터)
 
     // 그리드 구성
     const grid = Array.from({length: team.rows}, () => Array(team.cols).fill(null));
@@ -222,9 +237,14 @@
       }
     }
 
-    // 표 렌더링
+    // 렌더링
     for(let r=0; r<team.rows; r++){
       const tr = document.createElement('tr');
+
+      // 이 행이 "주 번호 줄"인지 먼저 판정
+      const weekNumberRow = isWeekNumberRow(grid[r], team.cols);
+      if(weekNumberRow) weekIdx++;
+
       for(let c=0; c<team.cols; c++){
         const cell = grid[r][c];
         if(cell === 'skip') continue;
@@ -236,19 +256,19 @@
           if(cell.colspan > 1) td.colSpan = cell.colspan;
           if(cell.bg) td.style.backgroundColor = cell.bg;
 
-          // 데이터 우선 렌더 (html > text)
-          if(cell.html && !htmlLooksEmpty(cell.html)){
+          // 데이터 렌더 (html 우선)
+          const textNow = visibleText(cell);
+          if(cell.html && textNow !== ''){
             td.innerHTML = cell.html;
           }else{
             if(cell.fc) td.style.color = cell.fc;
-            td.textContent = (cell.text ?? '').toString();
+            td.textContent = textNow;
           }
 
-          // 회색 전폭(±1 허용) + 내용 실질적으로 비어있으면 → 날짜 자동 표기
+          // ① 회색 전폭(±1 허용) + 내용 없음 ⇒ "N일(요일)" 자동 표기
           const colspan = cell.colspan || 1;
-          const nearFullWidth = (team.cols - colspan) <= 1; // team.cols와 1칸 차이까지 허용
-          const looksEmpty = htmlLooksEmpty(cell.html) && (!cell.text || String(cell.text).trim()==='');
-
+          const looksEmpty = (visibleText(cell) === '');
+          const nearFullWidth = (team.cols - colspan) <= 1;
           if(looksEmpty && nearFullWidth && isGrayColor(cell.bg)){
             if(dayCounter <= lastDay){
               td.textContent = `${dayCounter}일(${dowKR(year, month, dayCounter)})`;
@@ -256,10 +276,28 @@
             }
             dayCounter++;
           }
+
+          // ② "주 번호 줄"의 숫자 색상: 전달/다음달 옅게, 이번달 진하게
+          if(weekNumberRow){
+            const t = visibleText(cell);
+            if(/^\d{1,2}$/.test(t)){
+              const day = parseInt(t, 10);
+              // 이 칸이 실제 가리키는 날짜(이번달 기준)
+              const pos = (weekIdx * 7) + c - firstDow + 1;
+              const isCurrMonth = (pos >= 1 && pos <= lastDay);
+              if(isCurrMonth){
+                td.style.color = '#111827';   // 진한 글자
+                td.style.fontWeight = '700';
+              }else{
+                td.style.color = '#9ca3af';   // 옅은 회색
+                td.style.fontWeight = '600';
+              }
+            }
+          }
+
         }else{
           td.textContent = '';
         }
-
         tr.appendChild(td);
       }
       table.appendChild(tr);
