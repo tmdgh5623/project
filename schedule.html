@@ -33,8 +33,19 @@
   .teambar{ background:#e9eef5; border-bottom:1px solid #dbe2ea; color:#1f2937; font-size:12px; font-weight:700; letter-spacing:.2px; padding:8px 12px; }
 
   .table-wrap{ overflow:auto; }
-  table{ border-collapse:collapse; width:100%; table-layout:fixed; }
-  td{ border:1px solid #e6e6e6; padding:3px 6px; vertical-align:top; word-break:break-word; font-size:12px; line-height:1.15; }
+  table{ border-collapse:separate; border-spacing:0; width:100%; table-layout:fixed; }
+  /* 기본은 테두리 감춤 → 콘텐츠 있는 칸만 .bordered 부여 */
+  td{
+    border:1px solid transparent;
+    padding:3px 6px;
+    vertical-align:top;
+    word-break:break-word;
+    font-size:12px;
+    line-height:1.15;
+  }
+  td.bordered{ border-color:#e6e6e6; }       /* 보통 테두리 */
+  td.bordered-strong{ border-color:#cfd4dc; }/* 필요시 더 진하게 쓰고 싶을 때 */
+
 </style>
 </head>
 <body>
@@ -173,25 +184,28 @@
   function isGrayColor(c){
     if(!c) return false;
     c = String(c).trim().toLowerCase();
-    const common = ['#eee','#e6e6e6','#e5e7eb','#f0f0f0','#dddddd','#dcdcdc','#ececec','#efefef','#e9eef5','#f3f4f6','#e0e0e0','#cccccc'];
+    const common = ['#fff','#ffffff','#eee','#e6e6e6','#e5e7eb','#f0f0f0','#dddddd','#dcdcdc','#ececec','#efefef','#e9eef5','#f3f4f6','#e0e0e0','#cccccc','white','transparent'];
     if(common.some(x => c.startsWith(x))) return true;
     const m = c.match(/rgba?\((\d+)[,\s]+(\d+)[,\s]+(\d+)/);
     if(m){
       const r=+m[1], g=+m[2], b=+m[3];
       const avg = (r+g+b)/3, maxDiff = Math.max(Math.abs(r-avg), Math.abs(g-avg), Math.abs(b-avg));
-      return avg >= 200 && maxDiff <= 10;
+      return avg >= 235 || (avg >= 200 && maxDiff <= 10);
     }
     return false;
   }
 
   function visibleText(cell){
     if(cell?.html){
-      return String(cell.html).replace(/<br\s*\/?>/gi,' ').replace(/&nbsp;/gi,' ').replace(/<[^>]*>/g,'').trim();
+      return String(cell.html).replace(/<br\s*\/?>/gi,' ')
+                              .replace(/&nbsp;/gi,' ')
+                              .replace(/<[^>]*>/g,'')
+                              .trim();
     }
     return String(cell?.text ?? '').trim();
   }
 
-  // "작은 날짜 숫자(01~31)"로 꽉 찬 얇은 줄인지 감지
+  // "작은 날짜 숫자(01~31)"만 모여있는 얇은 줄인지 감지
   function isWeekNumberRow(rowCells, cols){
     let countDigits = 0, countCells = 0;
     for(let c=0; c<cols; c++){
@@ -204,7 +218,7 @@
     return countCells > 0 && countDigits >= Math.max(5, Math.floor(cols*0.6));
   }
 
-  /* ===== 핵심 렌더: 날짜 줄을 "그 자리"에서 표시 + 색상(일/토/평일, 외달) 처리 ===== */
+  /* ===== 핵심 렌더 ===== */
   function renderTeam(team, { sheetName, year } = {}){
     const card = document.createElement('section'); card.className = 'card';
     const bar  = document.createElement('div'); bar.className = 'teambar'; bar.textContent = `${team.id}팀`; card.appendChild(bar);
@@ -253,33 +267,26 @@
           const textNow = visibleText(cell);
 
           if (weekNumberRow){
-            // 날짜 숫자를 이 줄에서 그대로 보이게 한다
+            // 날짜 숫자만 보이고, 테두리는 숨김
             if (/^\d{1,2}$/.test(textNow)){
-              const pos     = (weekIdx * 7) + c - firstDow + 1; // 이 칸이 가리키는 "이번달 기준" 날짜
+              const pos     = (weekIdx * 7) + c - firstDow + 1;
               const inMonth = (pos >= 1 && pos <= lastDay);
-
-              // 실제 요일 계산(외달 포함)
+              // 실제 요일 색상(일/토/평일) + 외달은 연하게
               let dow;
-              if (inMonth) {
-                dow = new Date(year, month-1, pos).getDay();
-              } else if (pos < 1) {
-                const prevLast = daysInMonth(year, month-1);
-                dow = new Date(year, month-2, prevLast + pos).getDay();
-              } else {
-                dow = new Date(year, month, pos - lastDay).getDay();
-              }
+              if (inMonth) dow = new Date(year, month-1, pos).getDay();
+              else if (pos < 1) { const prevLast = daysInMonth(year, month-1); dow = new Date(year, month-2, prevLast + pos).getDay(); }
+              else { dow = new Date(year, month, pos - lastDay).getDay(); }
 
               td.textContent   = textNow;
               td.style.textAlign  = 'center';
               td.style.fontWeight = inMonth ? '700' : '600';
               td.style.color =
                 inMonth
-                  ? (dow === 0 ? '#d11'      // 일: 빨강
-                      : dow === 6 ? '#1d4ed8' // 토: 파랑
-                      : '#111827')            // 평일: 진한 검정
-                  : '#9ca3af';                // 외달: 연회색
-            } else {
-              // 숫자가 아닌 경우는 기본 표시
+                  ? (dow === 0 ? '#d11' : (dow === 6 ? '#1d4ed8' : '#111827'))
+                  : '#9ca3af';
+              // 테두리 없음 (지저분함 방지)
+            }else{
+              // 숫자가 아닌 경우만 표시(필요시)
               if (cell.html && textNow !== '') td.innerHTML = cell.html;
               else { if (cell.fc) td.style.color = cell.fc; td.textContent = textNow; }
             }
@@ -289,7 +296,7 @@
             if (cell.html && textNow !== '') td.innerHTML = cell.html;
             else { if (cell.fc) td.style.color = cell.fc; td.textContent = textNow; }
 
-            // 전폭 회색 + 비어있음 → 'N일(요일)' 자동 표기(기존 기능 유지)
+            // 전폭 회색 + 비어있음 → 'N일(요일)' 자동 표기
             const colspan = cell.colspan || 1;
             const looksEmpty = (textNow === '');
             const nearFullWidth = (team.cols - colspan) <= 1;
@@ -300,6 +307,11 @@
               }
               dayCounter++;
             }
+
+            // ▼▼▼ 빈 셀은 테두리 없음, 내용/강한배경만 테두리 표시 ▼▼▼
+            const hasText = (td.textContent && td.textContent.trim() !== '') || (cell.html && visibleText(cell) !== '');
+            const strongBg = cell.bg && !isGrayColor(cell.bg); // 진한 배경(노란 하이라이트 등)
+            if (hasText || strongBg) td.classList.add('bordered');
           }
 
         } else {
