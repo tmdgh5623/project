@@ -56,16 +56,12 @@
     height:100%;
     box-sizing:border-box;
   }
+
   /* 내용 래퍼(넘침 감지/축소용) */
   td > .cell{ display:block; height:100%; overflow:hidden; }
 
   /* 일정 항목 블록(자동 분할 결과) */
   td .it{ display:block; margin-bottom:2px; }
-
-  /* (선택) 내부 가로선 공유 방향 고정: 필요시 주석 해제
-  .table-wrap table td { border-top-width:0; }
-  tr[data-weekrow="1"] td { border-top-width:1px; }
-  */
 </style>
 </head>
 <body>
@@ -92,6 +88,10 @@
   /* ===== 옵션 ===== */
   const MIN_FONT_PX = 9;
   const MAX_FONT_PX = 12;
+
+  /* “원본 규칙” 고정값: 날짜 1 + 스케줄 4 + 기타 1 */
+  const SCHEDULE_ROWS_PER_WEEK = 4;
+  const NOTE_ROWS_PER_WEEK     = 1;
 
   /* ===== 레이아웃 ===== */
   function relayout(){
@@ -227,7 +227,7 @@
     return false;
   }
 
-  /* 빨간(인원/기타) 배경 판별 */
+  /* 빨간(인원/기타) 배경 판별 (fallback 용) */
   function isReddish(c){
     if(!c) return false;
     c = String(c).trim().toLowerCase();
@@ -237,7 +237,7 @@
         const r = parseInt(c.slice(1,3),16);
         const g = parseInt(c.slice(3,5),16);
         const b = parseInt(c.slice(5,7),16);
-        return (r>=200 && g<=190 && b<=190) || (r>=230 && r>g && r>b);
+        return (r>=200 && r>g && r>b);
       }
     }
     const m = c.match(/rgba?\((\d+)[,\s]+(\d+)[,\s]+(\d+)/);
@@ -356,7 +356,6 @@
           td.textContent = '';
         }
 
-        // 내용은 래퍼에 넣어 높이 증가 차단 + 축소용
         wrapCellContent(td);
         tr.appendChild(td);
       }
@@ -435,17 +434,29 @@
     const tables = Array.from(document.querySelectorAll('.table-wrap table'));
     if (!tables.length) return;
 
-    // 각 표를 주별로 분해하고, 각 주에서 "첫 번째 붉은줄"을 경계로 스케줄/기타 분리
-    const RED_THRESHOLD = 0.5; // 한 줄에서 붉은 배경이 차지하는 colspan 비율
+    // 1) 각 표의 주 시작 인덱스 수집
     const structures = tables.map(tbl=>{
       const rows = Array.from(tbl.querySelectorAll('tr'));
       const weekStarts = rows.map((tr,i)=> tr.dataset.weekrow==='1' ? i : -1).filter(i=>i>=0);
-      const weekBlocks = weekStarts.map((start, idx)=> rows.slice(start+1, (idx+1<weekStarts.length)?weekStarts[idx+1]:rows.length));
+      return { tbl, rows, weekStarts };
+    });
 
-      const weeks = weekBlocks.map(block=>{
-        let splitAt = -1; // 첫 붉은줄 index(없으면 -1)
-        for (let i=0; i<block.length; i++){
-          const tr = block[i];
+    // 2) 주별 타깃(최대) 높이 계산: 스케줄(4줄 총합), 기타(1줄)
+    const maxWeeks = Math.max(...structures.map(s=>s.weekStarts.length), 0);
+    const targets = Array.from({length:maxWeeks}, ()=>({sched:0, note:0}));
+
+    function pickWeekBands(rows, startIdx, nextStartIdx){
+      const blockStart = startIdx + 1;
+      const blockEnd   = (nextStartIdx ?? rows.length); // exclusive
+      // 우선 고정 규칙(4+1)으로 취함
+      let schedRows = rows.slice(blockStart, Math.min(blockStart + SCHEDULE_ROWS_PER_WEEK, blockEnd));
+      let noteRows  = rows.slice(blockStart + SCHEDULE_ROWS_PER_WEEK, Math.min(blockStart + SCHEDULE_ROWS_PER_WEEK + NOTE_ROWS_PER_WEEK, blockEnd));
+
+      // 만약 길이가 부족하면(표가 깨진 주), 붉은줄 탐지로 보정
+      if (schedRows.length < SCHEDULE_ROWS_PER_WEEK || noteRows.length < NOTE_ROWS_PER_WEEK){
+        let splitAt = -1;
+        for (let i=blockStart; i<blockEnd; i++){
+          const tr = rows[i];
           const tds = Array.from(tr.querySelectorAll('td'));
           const [rSum, spanSum] = tds.reduce((acc,td)=>{
             const span = td.colSpan || 1;
@@ -453,64 +464,61 @@
             const r = isReddish(bg) ? span : 0;
             return [acc[0]+r, acc[1]+span];
           }, [0,0]);
-          const ratio = spanSum ? (rSum/spanSum) : 0;
-          if (ratio >= RED_THRESHOLD){ splitAt = i; break; }
+          if (spanSum && (rSum/spanSum) >= 0.5){ splitAt = i; break; } // 보조 기준
         }
-        const schedRows = (splitAt === -1) ? block.slice() : block.slice(0, splitAt);
-        const noteRows  = (splitAt === -1) ? []          : block.slice(splitAt);
-
-        const schedH = schedRows.reduce((s,tr)=> s + tr.getBoundingClientRect().height, 0);
-        const noteH  = noteRows.reduce((s,tr)=> s + tr.getBoundingClientRect().height, 0);
-        return { schedRows, noteRows, schedH, noteH };
-      });
-
-      return { tbl, weeks };
-    });
-
-    const maxWeeks = Math.max(...structures.map(s=>s.weeks.length), 0);
-    if (!maxWeeks) return;
-
-    // 주번호별 전 테이블 타깃(최대) 높이 계산
-    const targets = Array.from({length:maxWeeks}, ()=>({sched:0, note:0}));
-    for (let w=0; w<maxWeeks; w++){
-      for (const s of structures){
-        const wk = s.weeks[w]; if (!wk) continue;
-        targets[w].sched = Math.max(targets[w].sched, Math.round(wk.schedH));
-        targets[w].note  = Math.max(targets[w].note , Math.round(wk.noteH));
+        if (splitAt !== -1){
+          schedRows = rows.slice(blockStart, splitAt);
+          noteRows  = rows.slice(splitAt, Math.min(splitAt + 1, blockEnd));
+        }
       }
+      return { schedRows, noteRows };
     }
 
-    // 균등 분배 + 마지막 행에 잔여 픽셀 가산 + 실제 합계로 최종 보정
+    // 타깃 수집
+    structures.forEach(s=>{
+      s.weekStarts.forEach((ws, idx)=>{
+        const next = s.weekStarts[idx+1];
+        const { schedRows, noteRows } = pickWeekBands(s.rows, ws, next);
+
+        const schedH = schedRows.reduce((sum,tr)=> sum + tr.getBoundingClientRect().height, 0);
+        const noteH  = noteRows.reduce((sum,tr)=> sum + tr.getBoundingClientRect().height, 0);
+
+        targets[idx].sched = Math.max(targets[idx].sched, Math.round(schedH));
+        targets[idx].note  = Math.max(targets[idx].note , Math.round(noteH));
+      });
+    });
+
+    // 3) 분배 함수: 균등 + 잔여 픽셀 + 실제 합계 보정
     function distribute(rowsArr, target){
       if (!rowsArr || !rowsArr.length || !isFinite(target) || target<=0) return;
-
       const base = Math.max(10, Math.floor(target / rowsArr.length));
       rowsArr.forEach(tr=>{
         tr.style.height = base + 'px';
         tr.querySelectorAll('td').forEach(td=> td.style.height = '100%');
       });
-
       let used = base * rowsArr.length;
       let leftover = Math.round(target - used);
-      if (leftover !== 0) {
+      if (leftover){
         const last = rowsArr[rowsArr.length-1];
         last.style.height = (base + leftover) + 'px';
       }
-
+      // 최종 보정(테두리/반올림)
       const total = rowsArr.reduce((s,tr)=> s + tr.getBoundingClientRect().height, 0);
       const delta = Math.round(target - total);
-      if (delta !== 0) {
+      if (delta){
         const last = rowsArr[rowsArr.length-1];
         const cur = parseFloat(getComputedStyle(last).height) || base;
         last.style.height = (cur + delta) + 'px';
       }
     }
 
-    // 적용
+    // 4) 적용: 같은 주의 모든 팀에 동일 타깃
     structures.forEach(s=>{
-      s.weeks.forEach((wk, wIdx)=>{
-        distribute(wk.schedRows, targets[wIdx].sched); // 스케줄(노랑+흰공란 포함)
-        distribute(wk.noteRows , targets[wIdx].note ); // 기타(빨간 줄)
+      s.weekStarts.forEach((ws, idx)=>{
+        const next = s.weekStarts[idx+1];
+        const { schedRows, noteRows } = pickWeekBands(s.rows, ws, next);
+        distribute(schedRows, targets[idx].sched);
+        distribute(noteRows , targets[idx].note );
       });
     });
   }
