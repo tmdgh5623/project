@@ -16,7 +16,6 @@
   #status{ color:#666; font-size:13px; margin-left:4px; }
 
   .page{ overflow:auto; padding:12px 14px 16px; box-sizing:border-box; height:calc(100vh - 96px); }
-
   .grid{ display:grid; grid-template-columns:1fr 1fr; gap:14px; }
   @media (max-width:980px){ .grid{ grid-template-columns:1fr; } }
 
@@ -26,28 +25,26 @@
   .table-wrap{ overflow:auto; }
   table{
     border-collapse:separate; border-spacing:0; width:100%; table-layout:fixed;
-    /* 기본 행 높이(그대로) */
-    --row-h: 26px;
+    --row-h: 26px;      /* 기본 콘텐츠 행 높이(통일 기준 아님, 초기값) */
 
-    /* ▼ 일자(숫자) 줄만 줄이기: 여기 3개로 제어 */
-    --weeknum-h: 10px;     /* 줄 높이 */
-    --weeknum-font: 8px;  /* 숫자 폰트 크기 */
-    --weeknum-pad-v: 1px;  /* 위아래 패딩 */
-    --weeknum-pad-h: 3px;  /* 좌우 패딩 */
+    /* 날짜(숫자) 줄만 얇게 — 필요시 이 3개로만 조절 */
+    --weeknum-h: 10px;  /* 날짜줄 높이 */
+    --weeknum-font: 8px;/* 날짜 숫자 폰트 */
+    --weeknum-pad-v: 1px; --weeknum-pad-h: 3px;
   }
   tbody tr{ height: var(--row-h); }
 
-  /* 일자(숫자) 줄 — 더 얇고 글씨/패딩도 축소 */
+  /* 날짜(숫자) 줄 */
   tr[data-weekrow="1"]{ height: var(--weeknum-h); }
   tr[data-weekrow="1"] td{
     text-align:center;
     padding: var(--weeknum-pad-v) var(--weeknum-pad-h);
     font-size: var(--weeknum-font);
     line-height:1;
-    border-color: transparent; /* 테두리 감춤 유지 */
+    border-color: transparent;
   }
 
-  /* 기본 테두리는 감춤 → 내용/강한 배경만 테두리 */
+  /* 기본 테두리는 감춤 → 내용/강한 배경만 표시 */
   td{
     border:1px solid transparent;
     padding:3px 6px;
@@ -55,7 +52,7 @@
     word-break:break-word;
     font-size:12px;
     line-height:1.15;
-    overflow:hidden;
+    overflow:hidden;              /* 셀은 커지지 않도록 */
   }
   td.bordered{ border-color:#e6e6e6; }
 </style>
@@ -81,7 +78,10 @@
   </div>
 
 <script>
-  const TARGET_WEEK_ROWS = 4;
+  /* 주간 간격 완전 통일 옵션
+     - 가장 작은 주 간격을 기준으로 모두 맞춤 (콘텐츠가 많던 주도 강제 축소)
+     - 그 뒤 글자 축소 → 다시 통일 2pass */
+  const TARGET_WEEK_ROWS_HINT = 4; // 실패 대비 기본 힌트(측정 못할 때 사용)
 
   function relayout(){
     const nav  = document.getElementById('nav');
@@ -93,7 +93,7 @@
     page.style.height = `calc(100vh - ${navH + topH}px)`;
   }
   window.addEventListener('load', relayout);
-  window.addEventListener('resize', () => { relayout(); uniformizeAllWeeks(); shrinkAllText(); });
+  window.addEventListener('resize', () => { relayout(); unifyWeeksStrict(); shrinkAllText(); unifyWeeksStrict(); });
 
   const api = (qs) => `/api/schedule${qs ? ('?' + qs) : ''}`;
   const $select  = document.getElementById('sheetSelect');
@@ -151,8 +151,11 @@
       }
       setLoading('');
       relayout();
-      uniformizeAllWeeks();
+
+      // 2-pass: 통일 → 글자축소 → 재통일
+      unifyWeeksStrict();
       shrinkAllText();
+      unifyWeeksStrict();
     }catch(e){
       if (e.name === 'AbortError') return;
       showError(e);
@@ -208,7 +211,10 @@
 
   function visibleText(cell){
     if(cell?.html){
-      return String(cell.html).replace(/<br\s*\/?>/gi,' ').replace(/&nbsp;/gi,' ').replace(/<[^>]*>/g,'').trim();
+      return String(cell.html).replace(/<br\s*\/?>/gi,' ')
+                              .replace(/&nbsp;/gi,' ')
+                              .replace(/<[^>]*>/g,'')
+                              .trim();
     }
     return String(cell?.text ?? '').trim();
   }
@@ -286,7 +292,6 @@
               if (cell.html && textNow !== '') td.innerHTML = cell.html;
               else { if (cell.fc) td.style.color = cell.fc; td.textContent = textNow; }
             }
-
           } else {
             if (cell.html && textNow !== '') td.innerHTML = cell.html;
             else { if (cell.fc) td.style.color = cell.fc; td.textContent = textNow; }
@@ -306,7 +311,6 @@
             const strongBg = cell.bg && !isGrayColor(cell.bg);
             if (hasText || strongBg) td.classList.add('bordered');
           }
-
         } else {
           td.textContent = '';
         }
@@ -320,30 +324,37 @@
     return card;
   }
 
-  function uniformizeAllWeeks(){
+  /* === 주간 간격 완전 통일(실측 기반) === */
+  function unifyWeeksStrict(){
     document.querySelectorAll('.table-wrap table').forEach(tbl => {
       const rows = Array.from(tbl.querySelectorAll('tr'));
-      const baseRowH = parseFloat(getComputedStyle(tbl).getPropertyValue('--row-h')) || 26;
-      const targetBlockPx = TARGET_WEEK_ROWS * baseRowH;
+      const weekIdxs = rows.map((tr,i)=>tr.dataset.weekrow==='1'?i:-1).filter(i=>i>=0);
+      if (weekIdxs.length === 0) return;
 
-      const weekIdxs = rows
-        .map((tr, i) => tr.dataset.weekrow === '1' ? i : -1)
-        .filter(i => i >= 0);
-
-      for (let w=0; w<weekIdxs.length; w++){
-        const start = weekIdxs[w];
-        const end   = (w+1 < weekIdxs.length) ? weekIdxs[w+1] : rows.length;
+      // 각 주 콘텐츠 구간과 실측 높이 계산
+      const blocks = weekIdxs.map((start, wIdx) => {
+        const end = (wIdx+1 < weekIdxs.length) ? weekIdxs[wIdx+1] : rows.length;
         const contentRows = rows.slice(start+1, end);
-        if (contentRows.length === 0) continue;
+        const h = contentRows.reduce((s,tr)=> s + tr.getBoundingClientRect().height, 0);
+        return { contentRows, h };
+      });
 
-        const perH = targetBlockPx / contentRows.length;
-        contentRows.forEach(tr => { tr.style.height = perH + 'px'; });
-      }
+      // 목표 높이: 실측 중 최소값(가장 작은 주)에 맞춤. 실측 실패 시 힌트값 사용
+      const hint = (parseFloat(getComputedStyle(tbl).getPropertyValue('--row-h')) || 26) * TARGET_WEEK_ROWS_HINT;
+      let targetBlockPx = Math.min(...blocks.map(b=>b.h || Infinity));
+      if (!isFinite(targetBlockPx) || targetBlockPx <= 0) targetBlockPx = hint;
+
+      // 각 주의 행 높이를 균등 분배
+      blocks.forEach(b => {
+        const perH = targetBlockPx / Math.max(1, b.contentRows.length);
+        b.contentRows.forEach(tr => { tr.style.height = perH + 'px'; });
+      });
     });
   }
 
+  /* === 글자 자동 축소 === */
   function shrinkAllText(){
-    const MIN = 8;
+    const MIN = 8;   // 더 작게 필요하면 7로
     const MAX = 12;
 
     document.querySelectorAll('.table-wrap table').forEach(tbl => {
@@ -359,15 +370,14 @@
     if (!td.textContent.trim() && td.children.length === 0) return;
 
     let fs = parseFloat(getComputedStyle(td).fontSize) || 12;
-
-    for (let i=0; i<8; i++){
+    for (let i=0; i<10; i++){
       const fitsH = td.scrollHeight <= td.clientHeight;
       const fitsW = td.scrollWidth  <= td.clientWidth;
       if (fitsH && fitsW) break;
 
       const hRatio = td.clientHeight / Math.max(td.scrollHeight, 1);
       const wRatio = td.clientWidth  / Math.max(td.scrollWidth, 1);
-      const ratio  = Math.max(0.5, Math.min(hRatio, wRatio)) * 0.98;
+      const ratio  = Math.max(0.4, Math.min(hRatio, wRatio)) * 0.98;
 
       const next = Math.max(minPx, Math.floor(fs * ratio));
       if (next >= fs) break;
@@ -378,7 +388,7 @@
     }
   }
 
-  function setLoading(msg){ document.getElementById('status').textContent = msg || ''; }
+  function setLoading(msg){ $status.textContent = msg || ''; }
   function showError(e){ console.error(e); setLoading(`오류: ${e?.message || e}`); }
   function esc(s){ return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
 </script>
