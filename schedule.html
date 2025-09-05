@@ -23,16 +23,19 @@
   .card{ border:1px solid #e5e7eb; border-radius:12px; overflow:visible; background:#fff; box-shadow:0 1px 4px rgba(0,0,0,.04); }
   .teambar{ background:#e9eef5; border-bottom:1px solid #dbe2ea; color:#1f2937; font-size:12px; font-weight:700; letter-spacing:.2px; padding:8px 12px; }
 
-  /* ===== "표 간격 / 비율 완전 통일"용 레이아웃 ===== */
+  /* ===== "표 간격 / 비율 완전 통일"용 새 레이아웃 ===== */
   :root{
     --week-h: 150px;        /* 한 주 블록 전체 높이(PC) */
     --date-h: 20px;         /* 날짜 숫자 줄 높이 */
-    --band-h: 24px;         /* 빨간 밴드(인원/휴무 등) 고정 높이 */
     --min-font: 9px;        /* 텍스트 축소 하한 */
     --max-font: 12px;       /* 기본 폰트 */
   }
   @media (max-width:980px){
-    :root{ --week-h: 126px; --date-h: 18px; --band-h: 22px; }
+    :root{
+    --week-h: 150px;        /* 한 주 블록 전체 높이(PC) */
+    --date-h: 20px;         /* 날짜 숫자 줄 높이 */
+    --band-h: 24px;         /* 빨간 이름/연차 밴드 고정 높이 */
+     }
   }
 
   .table-wrap{ position:relative; overflow:visible; padding:8px 10px 10px; }
@@ -40,7 +43,7 @@
   .week-grid{
     position:relative;
     display:grid; grid-template-columns:repeat(7,1fr);
-    /* grid-template-rows 는 주별로 JS에서 동적으로 설정 */
+    grid-template-rows: var(--date-h) repeat(var(--lanes), 1fr);
     height: var(--week-h);
   }
   /* 날짜(상단) 셀 */
@@ -49,12 +52,17 @@
   .day-head.sat{ color:#1d4ed8; font-weight:700; }
   .day-head.dim{ color:#9ca3af; font-weight:600; }
 
+  /* 상단 요일 헤더 */
+  .dow-header{ display:grid; grid-template-columns:repeat(7,1fr); background:#fff3b0; border:1px solid #e6e6e6; border-bottom:none; border-radius:6px 6px 0 0; overflow:hidden; }
+  .dow{ padding:6px 8px; font-weight:700; font-size:12px; text-align:center; border-right:1px solid #e6e6e6; }
+  .dow:last-child{ border-right:none; }
+  .dow.sun{ color:#d11; }
+  .dow.sat{ color:#1d4ed8; }
+
   /* 배경 격자선(하단 영역 전체에 세로/가로 보조선) */
   .week-grid::before{
     content:""; position:absolute; left:0; right:0; top:var(--date-h); bottom:0; pointer-events:none;
-    background-image:
-      /* 세로선 7칸 */
-      repeating-linear-gradient(to right,
+    background-image: repeating-linear-gradient(to right,
         transparent, transparent calc((100%/7) - 1px),
         #e6e6e6 calc((100%/7) - 1px), #e6e6e6 calc(100%/7)
       );
@@ -63,7 +71,7 @@
   /* 일정(이벤트) 박스 */
   .ev{ position:relative; margin:1px 2px; border:1px solid rgba(0,0,0,.15); border-radius:4px; overflow:hidden; background:#fff; }
   .ev .cell{ font-size:var(--max-font); line-height:1.15; padding:2px 4px; overflow:hidden; display:block; }
-  /* 빨간 밴드 전용 고정 높이 */
+  /* 빨간 이름/연차 밴드 고정 높이 */
   .ev.band{ height: var(--band-h); align-self: stretch; }
   .ev.band .cell{ line-height:1.2; font-weight:600; }
 
@@ -109,7 +117,8 @@
   window.addEventListener('load', relayout);
   window.addEventListener('resize', () => {
     relayout();
-    requestAnimationFrame(()=> document.querySelectorAll('.ev .cell').forEach(el => shrinkToFit(el, MIN_FONT_PX)));
+    // 일정 텍스트 재축소
+    document.querySelectorAll('.ev .cell').forEach(el => shrinkToFit(el, MIN_FONT_PX));
   });
 
   /* ===== 데이터 ===== */
@@ -170,11 +179,8 @@
       setLoading('');
       relayout();
 
-      // 글자 축소(레이아웃 완료 후 2번 보정)
-      requestAnimationFrame(()=>{
-        document.querySelectorAll('.ev .cell').forEach(el => shrinkToFit(el, MIN_FONT_PX));
-        requestAnimationFrame(()=> document.querySelectorAll('.ev .cell').forEach(el => shrinkToFit(el, MIN_FONT_PX)));
-      });
+      // 글자 축소(초기 1회)
+      document.querySelectorAll('.ev .cell').forEach(el => shrinkToFit(el, MIN_FONT_PX));
     }catch(e){
       if (e.name === 'AbortError') return;
       showError(e);
@@ -217,10 +223,11 @@
   function dowKR(y,m,d){ return ['일','월','화','수','목','금','토'][new Date(y, m-1, d).getDay()]; }
 
   function isGrayColor(c){
-    if(!c) return false; c = String(c).trim().toLowerCase();
+    if(!c) return false;
+    c = String(c).trim().toLowerCase();
     const common = ['#fff','#ffffff','#eee','#e6e6e6','#e5e7eb','#f0f0f0','#dddddd','#dcdcdc','#ececec','#efefef','#e9eef5','#f3f4f6','#e0e0e0','#cccccc','white','transparent'];
     if(common.some(x => c.startsWith(x))) return true;
-    const m = c.match(/rgba?\((\d+)[,\s]+(\d+)[,\s]+(\d+)\)/);
+    const m = c.match(/rgba?\((\d+)[,\s]+(\d+)[,\s]+(\d+)/);
     if(m){
       const r=+m[1], g=+m[2], b=+m[3];
       const avg = (r+g+b)/3, maxDiff = Math.max(Math.abs(r-avg), Math.abs(g-avg), Math.abs(b-avg));
@@ -228,23 +235,24 @@
     }
     return false;
   }
-
   function isRedishColor(c){
     if(!c) return false; c = String(c).trim().toLowerCase();
     const quick = ['#f4cccc','#f8d7da','#ffe5e5','#ffd6d6','#fdd','salmon','lightcoral','mistyrose'];
     if (quick.includes(c)) return true;
-    const hex = c.match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
-    if (hex){
-      let h = hex[1]; if (h.length===3) h = h.split('').map(x=>x+x).join('');
+    if (c[0]==='#' && (c.length===4 || c.length===7)){
+      let h=c.slice(1); if (h.length===3) h=h.split('').map(x=>x+x).join('');
       const r=parseInt(h.slice(0,2),16), g=parseInt(h.slice(2,4),16), b=parseInt(h.slice(4,6),16);
-      return (r - Math.max(g,b) >= 30) && r >= 140;
+      if(!isNaN(r)&&!isNaN(g)&&!isNaN(b)) return (r - Math.max(g,b) >= 30) && r >= 140;
     }
-    const rgb = c.match(/rgba?\((\d+)[,\s]+(\d+)[,\s]+(\d+)\)/);
-    if (rgb){ const r=+rgb[1], g=+rgb[2], b=+rgb[3]; return (r - Math.max(g,b) >= 30) && r >= 140; }
+    if (c.startsWith('rgb')){
+      const inside = c.substring(c.indexOf('(')+1, c.indexOf(')'));
+      const parts = inside.split(',').map(s=>parseInt(s.trim(),10));
+      const r=parts[0], g=parts[1], b=parts[2];
+      if(!isNaN(r)&&!isNaN(g)&&!isNaN(b)) return (r - Math.max(g,b) >= 30) && r >= 140;
+    }
     return false;
   }
 
-  // "날짜 숫자만 있는 줄" 감지
   function visibleText(cell){
     if(cell?.html){
       return String(cell.html).replace(/<br\s*\/?>(?=\s|$)/gi,' ')
@@ -254,6 +262,8 @@
     }
     return String(cell?.text ?? '').trim();
   }
+
+  // "날짜 숫자만 있는 줄" 감지
   function isWeekNumberRow(rowCells, cols){
     let countDigits = 0, countCells = 0;
     for(let c=0; c<cols; c++){
@@ -273,115 +283,85 @@
     const lastDay  = daysInMonth(year, month);
     const firstDow = new Date(year, month-1, 1).getDay();
 
-    // 1) 병합 반영한 그리드 생성
+    // 0) 상단 요일 헤더
+    const dowNames = ['일요일(Sun)','월요일(Mon)','화요일(Tue)','수요일(Wed)','목요일(Thu)','금요일(Fri)','토요일(Sat)'];
+    const header = document.createElement('div'); header.className = 'dow-header';
+    dowNames.forEach((nm, i)=>{ const d=document.createElement('div'); d.className='dow'; if(i===0) d.classList.add('sun'); if(i===6) d.classList.add('sat'); d.textContent=nm; header.appendChild(d);});
+    wrap.appendChild(header);
+
+    // 1) 병합 반영 그리드
     const grid = Array.from({length: team.rows}, () => Array(team.cols).fill(null));
     for (const cell of team.cells){
-      const r0 = cell.r - 1, c0 = cell.c - 1;
-      grid[r0][c0] = cell;
+      const r0 = cell.r - 1, c0 = cell.c - 1; grid[r0][c0] = cell;
       const rs = cell.rowspan || 1, cs = cell.colspan || 1;
-      for (let r=r0; r<r0+rs; r++){
-        for (let c=c0; c<c0+cs; c++){
-          if (r===r0 && c===c0) continue; grid[r][c] = 'skip';
-        }
-      }
+      for (let r=r0; r<r0+rs; r++) for (let c=c0; c<c0+cs; c++){ if (r===r0 && c===c0) continue; grid[r][c] = 'skip'; }
     }
 
-    // 2) 주(week) 구간 계산
-    const weekStartIdx = [];
-    for (let r=0; r<team.rows; r++) if (isWeekNumberRow(grid[r], team.cols)) weekStartIdx.push(r);
-    const weeks = weekStartIdx.map((start, i) => {
-      const end = (i+1 < weekStartIdx.length) ? weekStartIdx[i+1] : team.rows; // 다음 주 시작 전까지
-      return { r0:start, r1:end };
-    });
+    // 2) 주(week) 구간
+    const weekStartIdx = []; for (let r=0; r<team.rows; r++) if (isWeekNumberRow(grid[r], team.cols)) weekStartIdx.push(r);
+    const weeks = weekStartIdx.map((start, i) => ({ r0:start, r1:(i+1<weekStartIdx.length?weekStartIdx[i+1]:team.rows) }));
 
-    // 3) 주 단위로 CSS Grid 출력
+    // 3) 주별 렌더
     weeks.forEach((wk, wIdx) => {
-      const weekEl = document.createElement('section');
-      weekEl.className = 'week';
+      const weekEl = document.createElement('section'); weekEl.className = 'week';
 
-      // 이벤트 추출
-      const bandEvents = []; // 빨간 밴드(weekly bar)
-      const normalEvents = [];
+      // 이벤트 분리: 빨간 밴드 vs 일반 일정
+      const bandEvents = [], normalEvents = [];
       for (let r = wk.r0+1; r < wk.r1; r++){
         for (let c = 0; c < team.cols; c++){
-          const cell = grid[r][c];
-          if (!cell || cell === 'skip') continue; // 병합의 앵커만 사용
-          const txt = visibleText(cell);
-          if (!txt) continue;
+          const cell = grid[r][c]; if (!cell || cell === 'skip') continue;
+          const txt = visibleText(cell); if (!txt) continue;
           const span = Math.max(1, cell.colspan || 1);
-          const startCol = c + 1;                 // 1..7
-          const safeSpan  = Math.min(span, team.cols - c);
-          const bg  = cell.bg || '';
-          const fc  = cell.fc || '';
+          const startCol = c + 1; const safeSpan = Math.min(span, team.cols - c);
+          const bg = cell.bg || ''; const fc = cell.fc || '';
           const item = { startCol, span:safeSpan, text:txt, bg, fc };
-          // 규칙: '빨간' + 주에 걸친 긴 막대(>=5칸) → 밴드로 분리 (원본 크기 전용)
-          if (isRedishColor(bg) && safeSpan >= 5) bandEvents.push(item); else normalEvents.push(item);
+          if (isRedishColor(bg)) bandEvents.push(item); else normalEvents.push(item);
         }
       }
 
-      // 레인 배치(겹치지 않게): '일반 일정'만 고려
+      // 레인 배치: 일반 일정
       normalEvents.sort((a,b)=> a.startCol - b.startCol || b.span - a.span);
       const lanes = []; // [{endCol: number}]
-      for(const ev of normalEvents){
-        let placed = false;
-        for (let i=0; i<lanes.length; i++){
-          if (ev.startCol > (lanes[i].endCol || 0)) { lanes[i].endCol = ev.startCol + ev.span - 1; ev.lane = i; placed = true; break; }
-        }
-        if (!placed){ ev.lane = lanes.length; lanes.push({ endCol: ev.startCol + ev.span - 1 }); }
-      }
+      for(const ev of normalEvents){ let placed=false; for (let i=0;i<lanes.length;i++){ if (ev.startCol > (lanes[i].endCol||0)){ lanes[i].endCol = ev.startCol + ev.span - 1; ev.lane = i; placed=true; break; } } if(!placed){ ev.lane = lanes.length; lanes.push({ endCol: ev.startCol + ev.span - 1 }); } }
 
-      // CSS Grid 컨테이너 만들기 (밴드 존재 시 두 번째 행을 밴드 고정 높이로 확보)
-      const gridEl = document.createElement('div');
-      gridEl.className = 'week-grid';
+      // 레인 배치: 밴드(필요하면 여러 줄)
+      bandEvents.sort((a,b)=> a.startCol - b.startCol || b.span - a.span);
+      const bandLanes = [];
+      for(const ev of bandEvents){ let placed=false; for(let i=0;i<bandLanes.length;i++){ if (ev.startCol > (bandLanes[i].endCol||0)){ bandLanes[i].endCol = ev.startCol + ev.span - 1; ev.blane = i; placed=true; break; } } if(!placed){ ev.blane = bandLanes.length; bandLanes.push({ endCol: ev.startCol + ev.span - 1 }); } }
+
+      const gridEl = document.createElement('div'); gridEl.className = 'week-grid';
       const laneCount = Math.max(1, lanes.length || 1);
-      gridEl.style.gridTemplateRows = `var(--date-h) ${bandEvents.length ? 'var(--band-h) ' : ''}repeat(${laneCount}, 1fr)`;
+      const bandCount = bandLanes.length;
+      gridEl.style.gridTemplateRows = `var(--date-h) ${bandCount?`repeat(${bandCount}, var(--band-h)) `:''}repeat(${laneCount}, 1fr)`;
 
       // 날짜 헤더 7칸
       for (let col=0; col<7; col++){
-        const pos = (wIdx * 7) + col - firstDow + 1; // 해당 그리드 칸의 달력 날짜
+        const pos = (wIdx * 7) + col - firstDow + 1; // 해당 칸의 날짜
         const inMonth = (pos >= 1 && pos <= lastDay);
         let dow;
         if (inMonth) dow = new Date(year, month-1, pos).getDay();
         else if (pos < 1) { const prevLast = daysInMonth(year, month-1); dow = new Date(year, month-2, prevLast + pos).getDay(); }
         else { dow = new Date(year, month, pos - lastDay).getDay(); }
-
-        const d = document.createElement('div');
-        d.className = 'day-head';
-        if (!inMonth) d.classList.add('dim');
-        if (dow === 0) d.classList.add('sun');
-        if (dow === 6) d.classList.add('sat');
-        d.style.gridColumn = (col+1);
-        d.textContent = `${pos}`;
-        gridEl.appendChild(d);
+        const d = document.createElement('div'); d.className = 'day-head'; if (!inMonth) d.classList.add('dim'); if (dow===0) d.classList.add('sun'); if (dow===6) d.classList.add('sat'); d.style.gridColumn = (col+1); d.textContent = `${pos}`; gridEl.appendChild(d);
       }
 
-      // 밴드 이벤트 먼저 추가(두 번째 행 고정)
+      // 밴드 먼저 렌더(날짜줄 바로 아래부터)
       for(const ev of bandEvents){
         const e = document.createElement('div'); e.className = 'ev band';
-        e.style.gridColumn = `${ev.startCol} / ${ev.startCol + ev.span}`;
-        e.style.gridRow    = `2`;
-        if (ev.bg) e.style.background = ev.bg; // 원본 색상 유지
-        if (ev.fc) e.style.color = ev.fc;
-        e.title = ev.text;
-        const inner = document.createElement('div'); inner.className = 'cell'; inner.textContent = ev.text; e.appendChild(inner);
-        gridEl.appendChild(e);
+        e.style.gridColumn = `${ev.startCol} / ${ev.startCol + ev.span}`; e.style.gridRow = `${(ev.blane||0) + 2}`;
+        if (ev.bg) e.style.background = ev.bg; if (ev.fc) e.style.color = ev.fc; e.title = ev.text;
+        const inner = document.createElement('div'); inner.className='cell'; inner.textContent=ev.text; e.appendChild(inner); gridEl.appendChild(e);
       }
 
-      // 일반 이벤트 추가 (밴드가 있으면 3행부터 시작)
+      // 일반 일정(밴드 아래부터 시작)
       for(const ev of normalEvents){
         const e = document.createElement('div'); e.className = 'ev';
-        e.style.gridColumn = `${ev.startCol} / ${ev.startCol + ev.span}`;
-        const baseRow = bandEvents.length ? 3 : 2;
-        e.style.gridRow    = `${(ev.lane||0) + baseRow}`;
-        if (ev.bg) e.style.background = ev.bg; else e.style.background = '#fff';
-        if (ev.fc) e.style.color = ev.fc;
-        e.title = ev.text;
-        const inner = document.createElement('div'); inner.className = 'cell'; inner.textContent = ev.text; e.appendChild(inner);
-        gridEl.appendChild(e);
+        e.style.gridColumn = `${ev.startCol} / ${ev.startCol + ev.span}`; const base = bandCount + 2; e.style.gridRow = `${(ev.lane||0) + base}`;
+        if (ev.bg) e.style.background = ev.bg; if (ev.fc) e.style.color = ev.fc; e.title = ev.text;
+        const inner = document.createElement('div'); inner.className='cell'; inner.textContent=ev.text; e.appendChild(inner); gridEl.appendChild(e);
       }
 
-      weekEl.appendChild(gridEl);
-      wrap.appendChild(weekEl);
+      weekEl.appendChild(gridEl); wrap.appendChild(weekEl);
     });
 
     return card;
@@ -391,7 +371,7 @@
   function shrinkToFit(el, minPx){
     if (!el) return; if (!el.textContent.trim() && el.children.length === 0) return;
     let fs = parseFloat(getComputedStyle(el).fontSize) || MAX_FONT_PX;
-    for (let i=0; i<14; i++){
+    for (let i=0; i<12; i++){
       const fitsH = el.scrollHeight <= el.clientHeight;
       const fitsW = el.scrollWidth  <= el.clientWidth;
       if (fitsH && fitsW) break;
