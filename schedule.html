@@ -28,9 +28,9 @@
   table{
     border-collapse:collapse;
     width:100%; table-layout:fixed;
-    --row-h: 26px;            /* 기본 콘텐츠 행 높이 */
-    --weeknum-h: 10px;        /* 날짜 숫자 줄 높이 */
-    --weeknum-font: 8px;      /* 날짜 숫자 폰트 */
+    --row-h: 26px;
+    --weeknum-h: 10px;
+    --weeknum-font: 8px;
     --weeknum-pad-v: 1px;
     --weeknum-pad-h: 3px;
   }
@@ -85,7 +85,7 @@
 
 <script>
   /* ===== 옵션 ===== */
-  const MIN_FONT_PX = 9;       // 글자 최소 크기
+  const MIN_FONT_PX = 9;
   const MAX_FONT_PX = 12;
 
   /* ===== 레이아웃 ===== */
@@ -101,7 +101,7 @@
   window.addEventListener('load', relayout);
   window.addEventListener('resize', () => {
     relayout();
-    unifyWeeksAcrossTeams(); // 뷰포트 변경 시에도 재계산(전 팀 통일)
+    unifyWeeksByMax(); // 뷰포트 변경 시에도 재계산
   });
 
   /* ===== 데이터 ===== */
@@ -164,9 +164,9 @@
 
       // 순서 중요
       resetFonts();
-      autoSplitSchedules();   // 스케줄 칸 내용 분할(있으면)
+      autoSplitSchedules();   // 인원/기타(붉은줄)는 제외하고 분할
       shrinkAllText();
-      unifyWeeksAcrossTeams(); // ★ 전 팀(1~4팀) 동일 주차 기준으로 스케줄/기타 각각 통일
+      unifyWeeksByMax();      // ★ 전 팀 동일 높이(주/밴드별)
     }catch(e){
       if (e.name === 'AbortError') return;
       showError(e);
@@ -222,39 +222,25 @@
     return false;
   }
 
-  // 스케줄(노란) 판단
-  function isYellowish(c){
+  /* ★ 붉은(인원/기타) 배경 판별 */
+  function isReddish(c){
     if(!c) return false;
     c = String(c).trim().toLowerCase();
-    if (c === '#ffff00' || c === '#ff0') return true;
-    const hx = c.match(/^#([0-9a-f]{6})$/i);
-    if (hx){
-      const r=parseInt(hx[1].slice(0,2),16), g=parseInt(hx[1].slice(2,4),16), b=parseInt(hx[1].slice(4,6),16);
-      return (r>=220 && g>=220 && b<=180);
+    if (c.startsWith('#')){
+      if (c === '#f00' || c === '#ff0000') return true;
+      if (c.length === 7){
+        const r = parseInt(c.slice(1,3),16);
+        const g = parseInt(c.slice(3,5),16);
+        const b = parseInt(c.slice(5,7),16);
+        // 분홍~연빨강까지 포함
+        return (r>=200 && g<=190 && b<=190) || (r>=230 && g>=160 && b>=160);
+      }
     }
-    const rgb = c.match(/rgba?\((\d+)[,\s]+(\d+)[,\s]+(\d+)/);
-    if (rgb){
-      const r=+rgb[1], g=+rgb[2], b=+rgb[3];
-      return (r>=220 && g>=220 && b<=180);
-    }
-    return false;
-  }
-
-  // 인원/연차 등 빨간 밴드 판단
-  function isRedishColor(c){
-    if(!c) return false;
-    c = String(c).trim().toLowerCase();
-    const quick = ['#f4cccc','#f8d7da','#ffe5e5','#ffd6d6','#fdd','salmon','lightcoral','mistyrose'];
-    if (quick.includes(c)) return true;
-    const hx = c.match(/^#([0-9a-f]{6})$/i);
-    if (hx){
-      const r=parseInt(hx[1].slice(0,2),16), g=parseInt(hx[1].slice(2,4),16), b=parseInt(hx[1].slice(4,6),16);
-      return (r - Math.max(g,b) >= 30) && r >= 140;
-    }
-    const rgb = c.match(/rgba?\((\d+)[,\s]+(\d+)[,\s]+(\d+)/);
-    if (rgb){
-      const r=+rgb[1], g=+rgb[2], b=+rgb[3];
-      return (r - Math.max(g,b) >= 30) && r >= 140;
+    const m = c.match(/rgba?\((\d+)[,\s]+(\d+)[,\s]+(\d+)/);
+    if (m){
+      const r=+m[1], g=+m[2], b=+m[3];
+      // r 높고 g/b 낮거나, 분홍톤(r 가장 큼)
+      return (r>=200 && g<=180 && b<=180) || (r>=230 && r>g && r>b);
     }
     return false;
   }
@@ -416,99 +402,78 @@
     }
   }
 
-  // 스케줄(노란) 칸 텍스트 자동 분할
+  /* ★ 스케줄(붉은줄 제외 전부)만 항목 분할 */
   function autoSplitSchedules(){
-    document.querySelectorAll('.table-wrap table td').forEach(td=>{
-      const bg = td.style.backgroundColor || getComputedStyle(td).backgroundColor;
-      if(!isYellowish(bg)) return;
+    document.querySelectorAll('.table-wrap table tr:not([data-weekrow="1"])').forEach(tr=>{
+      tr.querySelectorAll('td').forEach(td=>{
+        const bg = getComputedStyle(td).backgroundColor || td.style.backgroundColor;
+        if (isReddish(bg)) return; // 인원/기타 줄은 분할하지 않음
+        const box = td.querySelector('.cell'); if(!box) return;
+        if (box.querySelector('.it')) return;
+        const html = box.innerHTML;
 
-      const box = td.querySelector('.cell');
-      if(!box) return;
-      if (box.querySelector('.it')) return; // 이미 분할됨
-
-      const html = box.innerHTML;
-
-      // 1) <br> 기준
-      if (/<br\s*\/?>/i.test(html)){
-        const parts = html
-          .replace(/&nbsp;/gi,' ')
-          .replace(/<br\s*\/?>/gi,'\n')
-          .split(/\n+/).map(s=>s.trim()).filter(Boolean);
-        if (parts.length>=2){
-          box.innerHTML = parts.map(p=>`<div class="it">${esc(p)}</div>`).join('');
-          return;
+        if (/<br\s*\/?>/i.test(html)){
+          const parts = html.replace(/&nbsp;/gi,' ')
+                            .replace(/<br\s*\/?>/gi,'\n')
+                            .split(/\n+/).map(s=>s.trim()).filter(Boolean);
+          if (parts.length>=2){ box.innerHTML = parts.map(p=>`<div class="it">${esc(p)}</div>`).join(''); return; }
         }
-      }
-      // 2) 구분기호 기준(텍스트만 있는 경우)
-      if (box.children.length===0){
-        const txt = (box.textContent||'').trim();
-        const parts = txt.split(/(?:\s*[,/;·•]\s*|\n)+/).map(s=>s.trim()).filter(Boolean);
-        if (parts.length>=2){
-          box.innerHTML = parts.map(p=>`<div class="it">${esc(p)}</div>`).join('');
+        if (box.children.length===0){
+          const txt = (box.textContent||'').trim();
+          const parts = txt.split(/(?:\s*[,/;·•]\s*|\n)+/).map(s=>s.trim()).filter(Boolean);
+          if (parts.length>=2){ box.innerHTML = parts.map(p=>`<div class="it">${esc(p)}</div>`).join(''); }
         }
-      }
+      });
     });
   }
 
-  /* ===== 주간 간격 “전 팀 통일” (스케줄/기타 구간을 분리해 각각 맞춤) ===== */
-  function unifyWeeksAcrossTeams(){
+  /* ===== 주간 간격 통일 (전 팀, 스케줄/인원·기타 분리) ===== */
+  function unifyWeeksByMax(){
     const tables = Array.from(document.querySelectorAll('.table-wrap table'));
     if (!tables.length) return;
 
-    // 각 테이블 → 주 블록(날짜줄로 구분) 수집
-    const structs = tables.map(tbl=>{
+    // 각 표를 주별로 쪼개어, '붉은줄(인원/기타)' 행과 나머지(스케줄) 행으로 분류
+    const structures = tables.map(tbl=>{
       const rows = Array.from(tbl.querySelectorAll('tr'));
       const weekIdxs = rows.map((tr,i)=> tr.dataset.weekrow==='1' ? i : -1).filter(i=>i>=0);
       const blocks = weekIdxs.map((start, idx)=> rows.slice(start+1, (idx+1<weekIdxs.length)?weekIdxs[idx+1]:rows.length));
 
-      // 각 주의 행들을 스케줄/기타로 분리
       const weeks = blocks.map(block=>{
-        const scheduleRows = [];
-        const otherRows    = [];
-        block.forEach((tr, i) => {
+        const schedRows = [];
+        const noteRows  = [];
+        block.forEach((tr,i)=>{
           const tds = Array.from(tr.querySelectorAll('td'));
-          if (tds.length === 0){ otherRows.push(tr); return; }
-
-          // 배경색 비율(열 병합 고려)
-          const [ySum, rSum, spanSum] = tds.reduce((acc,td)=>{
+          const [rSum, spanSum] = tds.reduce((acc,td)=>{
             const span = td.colSpan || 1;
-            const bg = td.style.backgroundColor || getComputedStyle(td).backgroundColor || '';
-            const y = isYellowish(bg) ? span : 0;
-            const r = isRedishColor(bg) ? span : 0;
-            return [acc[0]+y, acc[1]+r, acc[2]+span];
-          }, [0,0,0]);
+            const bg = getComputedStyle(td).backgroundColor || td.style.backgroundColor;
+            const isR = isReddish(bg) ? span : 0;
+            return [acc[0]+isR, acc[1]+span];
+          }, [0,0]);
+          const redRatio = spanSum ? (rSum/spanSum) : 0;
 
-          const yellowRatio = spanSum ? (ySum/spanSum) : 0;
-          const redRatio    = spanSum ? (rSum/spanSum) : 0;
-
-          // 규칙:
-          //  - 빨강 비율이 꽤 있으면 “기타(밴드)”로
-          //  - 아니고 노랑이 일정 수준 이상이면 “스케줄”
-          //  - 둘 다 아니면 “기타”
-          if (redRatio >= 0.25) otherRows.push(tr);
-          else if (yellowRatio >= 0.30) scheduleRows.push(tr);
-          else otherRows.push(tr);
+          // 붉은색(인원/기타) 비율이 높은 줄은 noteRows, 나머지는 스케줄
+          if (redRatio >= 0.3) noteRows.push(tr);
+          else schedRows.push(tr);
         });
 
-        const schedH = scheduleRows.reduce((s,tr)=> s + tr.getBoundingClientRect().height, 0);
-        const otherH = otherRows.reduce((s,tr)=> s + tr.getBoundingClientRect().height, 0);
-        return { scheduleRows, otherRows, schedH, otherH };
+        const schedH = schedRows.reduce((s,tr)=> s + tr.getBoundingClientRect().height, 0);
+        const noteH  = noteRows.reduce((s,tr)=> s + tr.getBoundingClientRect().height, 0);
+        return { schedRows, noteRows, schedH, noteH };
       });
 
       return { tbl, weeks };
     });
 
-    const maxWeeks = Math.max(...structs.map(s=>s.weeks.length), 0);
+    const maxWeeks = Math.max(...structures.map(s=>s.weeks.length), 0);
     if (!maxWeeks) return;
 
-    // 주번호별 “스케줄합”, “기타합”의 전테이블 최대값(target) 계산
-    const targets = Array.from({length:maxWeeks}, ()=>({sched:0, other:0}));
+    // 주번호별 전 테이블 최대 높이(스케줄/인원·기타) 계산
+    const targets = Array.from({length:maxWeeks}, ()=>({sched:0, note:0}));
     for (let w=0; w<maxWeeks; w++){
-      for (const s of structs){
-        const wk = s.weeks[w];
-        if (!wk) continue;
+      for (const s of structures){
+        const wk = s.weeks[w]; if (!wk) continue;
         if (wk.schedH > targets[w].sched) targets[w].sched = wk.schedH;
-        if (wk.otherH > targets[w].other) targets[w].other = wk.otherH;
+        if (wk.noteH  > targets[w].note ) targets[w].note  = wk.noteH;
       }
     }
 
@@ -516,9 +481,9 @@
     function distribute(rowsArr, target){
       if (!rowsArr || !rowsArr.length || !isFinite(target) || target<=0) return;
       const base = Math.max(10, Math.floor(target / rowsArr.length));
-      rowsArr.forEach(tr => {
+      rowsArr.forEach(tr=>{
         tr.style.height = base + 'px';
-        tr.querySelectorAll('td').forEach(td => td.style.height = '100%');
+        tr.querySelectorAll('td').forEach(td=> td.style.height = '100%');
       });
       const used = base * rowsArr.length;
       const leftover = (target - used) | 0;
@@ -528,11 +493,11 @@
       }
     }
 
-    // 각 테이블에 주번호별 target 적용 → 전 팀 가로 정렬
-    structs.forEach(s=>{
+    // 적용: 같은 주의 두 밴드를 전 팀 동일 높이로
+    structures.forEach(s=>{
       s.weeks.forEach((wk, wIdx)=>{
-        distribute(wk.scheduleRows, targets[wIdx].sched); // 스케줄 영역 통일
-        distribute(wk.otherRows   , targets[wIdx].other); // 기타(밴드/비노랑) 통일
+        distribute(wk.schedRows, targets[wIdx].sched); // 스케줄(노랑+흰공란 포함)
+        distribute(wk.noteRows , targets[wIdx].note ); // 인원·기타(붉은줄)
       });
     });
   }
@@ -541,7 +506,8 @@
   function setLoading(msg){ $status.textContent = msg || ''; }
   function showError(e){ console.error(e); setLoading(`오류: ${e?.message || e}`); }
   function esc(s){
-    const map = {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}; return String(s).replace(/[&<>"']/g, ch => map[ch]);
+    const map = {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"};
+    return String(s).replace(/[&<>"']/g, ch => map[ch]);
   }
 </script>
 </body>
