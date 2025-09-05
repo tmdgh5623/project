@@ -380,11 +380,7 @@
     td.appendChild(wrapper);
   }
 
-  /* ===== 주간 간격 “컨테이너 기준 완전 통일” =====
-     - 카드 내부 스크롤영역(wrap) 높이에서 날짜줄 높이를 뺀 뒤
-       주 개수로 정확히 나눠 동일한 주 높이를 만든다.
-     - 각 주 안의 행 수가 달라도 마지막 행에 남는 px를 몰아줘 1px 오차 없이 고정.
-  */
+  /* ===== 주간 간격 “컨테이너 기준 완전 통일” ===== */
   function unifyWeeksByContainer(){
     document.querySelectorAll('.table-wrap table').forEach(tbl => {
       const wrap = tbl.closest('.table-wrap');
@@ -452,7 +448,7 @@
     let fs = parseFloat(getComputedStyle(el).fontSize) || 12;
     for (let i=0; i<10; i++){
       const fitsH = el.scrollHeight <= el.clientHeight;
-      const fitsW = el.scrollWidth  <= el.clientWidth;
+      const fitsW = el.clientWidth  <= el.clientWidth;
       if (fitsH && fitsW) break;
 
       const hRatio = el.clientHeight / Math.max(el.scrollHeight, 1);
@@ -471,8 +467,11 @@
   /* ===== 공통 ===== */
   function setLoading(msg){ $status.textContent = msg || ''; }
   function showError(e){ console.error(e); setLoading(`오류: ${e?.message || e}`); }
+
+  // ✅ 안전한 문자열 이스케이프 (괄호/따옴표 문제 해결)
   function esc(s){
-    return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]);
+    const map = {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"};
+    return String(s).replace(/[&<>"']/g, ch => map[ch]);
   }
 </script>
 </body>
