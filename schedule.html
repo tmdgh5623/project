@@ -24,23 +24,17 @@
   .teambar{ background:#e9eef5; border-bottom:1px solid #dbe2ea; color:#1f2937; font-size:12px; font-weight:700; letter-spacing:.2px; padding:8px 12px; }
 
   /* ===== 표 기본 ===== */
-  .table-wrap{ overflow:visible; }
+  .table-wrap{ overflow:visible; }              /* 카드 내부 스크롤 제거 */
   table{
-    border-collapse:collapse; width:100%; table-layout:fixed;
-    --row-h: 26px;          /* 기본 콘텐츠 행 높이 */
-    --weeknum-h: 10px;      /* 날짜 숫자 줄 높이 */
-    --weeknum-font: 8px;    /* 날짜 숫자 폰트 */
+    border-collapse:collapse;                   /* 겹치는 테두리 방지(단일선) */
+    width:100%; table-layout:fixed;
+    --row-h: 26px;                              /* 기본 콘텐츠 행 높이 */
+    --weeknum-h: 10px;                          /* 날짜 숫자 줄 높이 */
+    --weeknum-font: 8px;                        /* 날짜 숫자 폰트 */
     --weeknum-pad-v: 1px;
     --weeknum-pad-h: 3px;
   }
   tbody tr{ height: var(--row-h); }
-
-  /* 요일 헤더 */
-  tr[data-dow="1"] td{
-    background:#f5e58c;            /* 원본 느낌의 노란 헤더 */
-    border:1px solid #e6e6e6;
-    font-weight:700; font-size:12px; text-align:center; padding:6px 0;
-  }
 
   /* 날짜(숫자) 줄 */
   tr[data-weekrow="1"]{ height: var(--weeknum-h); }
@@ -52,18 +46,20 @@
   }
 
   td{
-    border:1px solid #e6e6e6;
+    border:1px solid #e6e6e6;                   /* 모든 셀 단일 테두리 */
     padding:3px 6px;
     vertical-align:top;
     word-break:break-word;
     font-size:12px;
     line-height:1.15;
-    overflow:hidden;
+    overflow:hidden;                             /* 셀은 절대 행 높이를 밀어올리지 않음 */
     height:100%;
     box-sizing:border-box;
   }
   /* 내용 래퍼(넘침 감지/축소용) */
-  td > .cell{ display:block; height:100%; overflow:hidden; }
+  td > .cell{
+    display:block; height:100%; overflow:hidden;
+  }
 </style>
 </head>
 <body>
@@ -88,7 +84,7 @@
 
 <script>
   /* ===== 옵션 ===== */
-  const MIN_FONT_PX = 9;       // 글자 최소 크기
+  const MIN_FONT_PX = 9;       // 글자 최소 크기 (과도한 축소 방지)
   const MAX_FONT_PX = 12;
 
   /* ===== 레이아웃 ===== */
@@ -102,7 +98,10 @@
     page.style.height = `calc(100vh - ${navH + topH}px)`;
   }
   window.addEventListener('load', relayout);
-  window.addEventListener('resize', () => { relayout(); unifyWeeksByMax(); });
+  window.addEventListener('resize', () => {
+    relayout();
+    unifyWeeksByMax();     // 뷰포트 변경 시에도 주 높이 재계산
+  });
 
   /* ===== 데이터 ===== */
   const api = (qs) => `/api/schedule${qs ? ('?' + qs) : ''}`;
@@ -162,7 +161,7 @@
       setLoading('');
       relayout();
 
-      // 순서: 렌더 → 폰트 초기화/축소 → 주간 통일(스케줄 행만)
+      // 순서 중요: 행 렌더 → 폰트 초기화/축소 → 주 높이 통일
       resetFonts();
       shrinkAllText();
       unifyWeeksByMax();
@@ -221,26 +220,6 @@
     return false;
   }
 
-  // 빨간(이름/연차 등) 배경 감지
-  function isRedishColor(c){
-    if(!c) return false;
-    c = String(c).trim().toLowerCase();
-    const quick = ['#f4cccc','#f8d7da','#ffe5e5','#ffd6d6','#fdd','salmon','lightcoral','mistyrose'];
-    if (quick.includes(c)) return true;
-    const hx = c.match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
-    if (hx){
-      let h = hx[1]; if (h.length===3) h = h.split('').map(x=>x+x).join('');
-      const r=parseInt(h.slice(0,2),16), g=parseInt(h.slice(2,4),16), b=parseInt(h.slice(4,6),16);
-      return (r - Math.max(g,b) >= 30) && r >= 140;
-    }
-    const rgb = c.match(/rgba?\((\d+)[,\s]+(\d+)[,\s]+(\d+)/);
-    if (rgb){
-      const r=+rgb[1], g=+rgb[2], b=+rgb[3];
-      return (r - Math.max(g,b) >= 30) && r >= 140;
-    }
-    return false;
-  }
-
   function visibleText(cell){
     if(cell?.html){
       return String(cell.html).replace(/<br\s*\/?>/gi,' ')
@@ -272,16 +251,6 @@
     const wrap  = document.createElement('div'); wrap.className = 'table-wrap';
     const table = document.createElement('table');
 
-    // 요일 헤더(일~토)
-    const trHead = document.createElement('tr'); trHead.dataset.dow = '1';
-    const dows = ['일요일(Sun)','월요일(Mon)','화요일(Tue)','수요일(Wed)','목요일(Thu)','금요일(Fri)','토요일(Sat)'];
-    for(let i=0;i<team.cols;i++){
-      const td = document.createElement('td');
-      td.textContent = dows[i % 7];
-      trHead.appendChild(td);
-    }
-    table.appendChild(trHead);
-
     const month    = parseMonth(sheetName);
     const lastDay  = daysInMonth(year, month);
     const firstDow = new Date(year, month-1, 1).getDay();
@@ -308,9 +277,6 @@
       const weekNumberRow = isWeekNumberRow(grid[r], team.cols);
       if (weekNumberRow) { weekIdx++; tr.dataset.weekrow = '1'; }
 
-      // 밴드/스케줄 판별을 위해 ‘빨간 배경’ 포함 여부만 본다(빨간이 하나라도 있으면 밴드)
-      let hasRed = false;
-
       for (let c=0; c<team.cols; c++){
         const cell = grid[r][c];
         if (cell === 'skip') continue;
@@ -320,10 +286,7 @@
         if (cell){
           if (cell.rowspan > 1) td.rowSpan = cell.rowspan;
           if (cell.colspan > 1) td.colSpan = cell.colspan;
-          if (cell.bg) {
-            td.style.backgroundColor = cell.bg;   // 색상 그대로
-            if (isRedishColor(cell.bg)) hasRed = true;
-          }
+          if (cell.bg) td.style.backgroundColor = cell.bg;
 
           const textNow = visibleText(cell);
 
@@ -348,7 +311,7 @@
             if (cell.html && textNow !== '') td.innerHTML = cell.html;
             else { if (cell.fc) td.style.color = cell.fc; td.textContent = textNow; }
 
-            // 전폭 회색 + 비어있음 → 'N일(요일)' 자동 표기(원본 유지용; 회색 가이드인 경우만)
+            // 전폭 회색 + 비어있음 → 'N일(요일)' 자동 표기
             const colspan = cell.colspan || 1;
             const looksEmpty = (textNow === '');
             const nearFullWidth = (team.cols - colspan) <= 1;
@@ -365,14 +328,10 @@
           td.textContent = '';
         }
 
+        // 내용은 래퍼에 넣어 높이 증가 차단 + 축소용
         wrapCellContent(td);
         tr.appendChild(td);
       }
-
-      if (!weekNumberRow){
-        tr.dataset.kind = hasRed ? 'band' : 'schedule';
-      }
-
       table.appendChild(tr);
     }
 
@@ -397,8 +356,7 @@
     });
   }
   function shrinkAllText(){
-    document.querySelectorAll('.table-wrap table tr:not([data-weekrow="1"]) td .cell')
-      .forEach(el => shrinkToFit(el, MIN_FONT_PX));
+    document.querySelectorAll('.table-wrap table tr:not([data-weekrow="1"]) td .cell').forEach(el => shrinkToFit(el, MIN_FONT_PX));
   }
   function shrinkToFit(el, minPx){
     if (!el.textContent.trim() && el.children.length === 0) return;
@@ -419,38 +377,44 @@
     }
   }
 
-  /* ===== 주간 간격: 스케줄 행만 균등화 ===== */
+  /* ===== 주간 간격 “가장 높은 주 기준으로 완전 통일” =====
+     - 각 주의 콘텐츠 실제 높이를 측정
+     - 그 중 최대값을 모든 주에 적용(마지막 행에 여분 px 몰아주기)
+     - 카드 내부 스크롤이 절대 생기지 않도록 함(페이지 전체만 스크롤)
+  */
   function unifyWeeksByMax(){
     document.querySelectorAll('.table-wrap table').forEach(tbl => {
       const rows = Array.from(tbl.querySelectorAll('tr'));
       if (rows.length === 0) return;
 
-      // 날짜줄 시작 인덱스
-      const weekIdxs = rows.map((tr,i)=> tr.dataset.weekrow==='1' ? i : -1).filter(i=>i>=0);
+      // 날짜줄 인덱스(텍스트 플래그 기반)
+      let weekIdxs = rows.map((tr,i)=> tr.dataset.weekrow==='1' ? i : -1).filter(i=>i>=0);
       if (weekIdxs.length === 0) return;
 
+      // 각 주의 콘텐츠 행들 + 실제 높이
       const blocks = weekIdxs.map((start, wIdx) => {
         const end = (wIdx+1 < weekIdxs.length) ? weekIdxs[wIdx+1] : rows.length;
-        const contentRows  = rows.slice(start+1, end);
-        const scheduleRows = contentRows.filter(tr => tr.dataset.kind === 'schedule'); // 빨간줄 제외
-        const schedHeight  = scheduleRows.reduce((s,tr)=> s + tr.getBoundingClientRect().height, 0);
-        return { scheduleRows, schedHeight };
+        const contentRows = rows.slice(start+1, end);
+        const heightPx = contentRows.reduce((s,tr)=> s + tr.getBoundingClientRect().height, 0);
+        return { contentRows, heightPx };
       });
 
-      const target = Math.max(...blocks.map(b => b.schedHeight), 0) | 0;
+      // 목표 = 최대 주 높이
+      const target = Math.max(...blocks.map(b => b.heightPx)) | 0;
       if (!isFinite(target) || target <= 0) return;
 
-      blocks.forEach(({scheduleRows}) => {
-        if (scheduleRows.length === 0) return;
-        const base = Math.max(10, Math.floor(target / scheduleRows.length));
-        scheduleRows.forEach(tr => {
+      // 주별로 행수에 균등 분배(+반올림 오차 마지막 행에)
+      blocks.forEach(({contentRows}) => {
+        if (contentRows.length === 0) return;
+        const base = Math.max(10, Math.floor(target / contentRows.length));
+        contentRows.forEach(tr => {
           tr.style.height = base + 'px';
           tr.querySelectorAll('td').forEach(td => td.style.height = '100%');
         });
-        const used = base * scheduleRows.length;
+        const used = base * contentRows.length;
         const leftover = target - used;
         if (leftover !== 0){
-          const last = scheduleRows[scheduleRows.length - 1];
+          const last = contentRows[contentRows.length - 1];
           last.style.height = (base + leftover) + 'px';
         }
       });
@@ -461,8 +425,11 @@
   function setLoading(msg){ $status.textContent = msg || ''; }
   function showError(e){ console.error(e); setLoading(`오류: ${e?.message || e}`); }
   function esc(s){
-    const map = {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}; return String(s).replace(/[&<>"']/g, ch => map[ch]);
+    const map = {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"};
+    return String(s).replace(/[&<>"']/g, ch => map[ch]);
   }
 </script>
 </body>
 </html>
+
+
