@@ -50,7 +50,6 @@
     --weeknum-pad-h: 3px;
   }
 
-  /* 박스 사이즈(패딩/테두리 포함) 한 번에 맞추기 */
   table, tbody, tr, td { box-sizing:border-box; }
 
   tbody tr{ height: var(--row-h); }
@@ -73,13 +72,14 @@
     word-break:break-word;
     font-size:12px;
     line-height:1.15;
-    overflow:hidden;       /* 넘침은 잘라냄 */
-    height:100%;           /* 행 높이를 그대로 상속 */
+    overflow:hidden;         /* 넘침은 잘라냄 */
+    height:100%;
   }
   td .cell{
     display:block;
     height:100%;
-    overflow:hidden;       /* 글자는 이 래퍼 안에서만 보이게 */
+    max-height:100%;
+    overflow:hidden;         /* 텍스트는 래퍼 안에서만 보이게 */
   }
   td.bordered{ border-color:#e6e6e6; }
 </style>
@@ -105,8 +105,6 @@
   </div>
 
 <script>
-  /* ===== 옵션 ===== */
-  // 힌트: 숫자줄을 못 잡을 때 사용(기본 행높이 * 주당행수)
   const TARGET_WEEK_ROWS_HINT = 4;
 
   /* ===== 레이아웃 ===== */
@@ -122,9 +120,10 @@
   window.addEventListener('load', relayout);
   window.addEventListener('resize', () => {
     relayout();
-    unifyWeeksByContainer();
+    unifyWeeksAbsolute();
     shrinkAllText();
-    unifyWeeksByContainer();
+    // 레이아웃 고정 재확인
+    requestAnimationFrame(unifyWeeksAbsolute);
   });
 
   /* ===== 데이터 핸들링 ===== */
@@ -143,7 +142,6 @@
   init().catch(showError);
 
   async function init(){
-    // 시트 목록(5분 캐시)
     let sheets = null;
     try{
       const cached = JSON.parse(sessionStorage.getItem('sheets:v1') || 'null');
@@ -186,10 +184,10 @@
       setLoading('');
       relayout();
 
-      // 2-pass: 주 통일 → 글자 축소 → 주 재통일
-      unifyWeeksByContainer();
+      // 2-pass: 통일 → 축소 → 통일(확정)
+      unifyWeeksAbsolute();
       shrinkAllText();
-      unifyWeeksByContainer();
+      requestAnimationFrame(unifyWeeksAbsolute);
     }catch(e){
       if (e.name === 'AbortError') return;
       showError(e);
@@ -317,7 +315,6 @@
           const textNow = visibleText(cell);
 
           if (weekNumberRow){
-            // 날짜 숫자 줄
             if (/^\d{1,2}$/.test(textNow)){
               const pos     = (weekIdx * 7) + c - firstDow + 1;
               const inMonth = (pos >= 1 && pos <= lastDay);
@@ -335,11 +332,9 @@
             }
 
           } else {
-            // 일반 데이터 줄
             if (cell.html && textNow !== '') td.innerHTML = cell.html;
             else { if (cell.fc) td.style.color = cell.fc; td.textContent = textNow; }
 
-            // 전폭 회색 + 비어있음 → 'N일(요일)' 자동 표기
             const colspan = cell.colspan || 1;
             const looksEmpty = (textNow === '');
             const nearFullWidth = (team.cols - colspan) <= 1;
@@ -355,7 +350,6 @@
             const strongBg = cell.bg && !isGrayColor(cell.bg);
             if (hasText || strongBg) td.classList.add('bordered');
           }
-
         } else {
           td.textContent = '';
         }
@@ -380,14 +374,22 @@
     td.appendChild(wrapper);
   }
 
-  /* ===== 주간 간격 “컨테이너 기준 완전 통일” ===== */
-  function unifyWeeksByContainer(){
+  /* ===== 주간 간격 “절대 통일” (테이블 실측 기준) =====
+     - 날짜줄 사이 구간의 실제 총높이를 측정
+     - 모든 주를 가장 작은 주(height)로 강제 맞춤
+     - 각 주 내부 행 수에 균등 분배, 남는 px는 마지막 행에 몰아줌
+  */
+  function unifyWeeksAbsolute(){
     document.querySelectorAll('.table-wrap table').forEach(tbl => {
-      const wrap = tbl.closest('.table-wrap');
-      if (!wrap) return;
-
       const rows = Array.from(tbl.querySelectorAll('tr'));
       if (rows.length === 0) return;
+
+      // 측정 전에 기존 강제 높이 제거(정확한 실측용)
+      rows.forEach(tr => {
+        tr.style.removeProperty('height');
+        tr.style.removeProperty('min-height');
+        tr.style.removeProperty('max-height');
+      });
 
       // 날짜줄 인덱스(텍스트 → 실패 시 얇은 높이로 보정)
       let weekIdxs = rows.map((tr,i)=> tr.dataset.weekrow==='1' ? i : -1).filter(i=>i>=0);
@@ -397,36 +399,39 @@
       }
       if (weekIdxs.length === 0) return;
 
-      // 날짜줄 총 높이, wrap 높이
-      const sumWeeknumPx = weekIdxs.reduce((s, i) => s + rows[i].getBoundingClientRect().height, 0);
-      const wrapH = wrap.clientHeight;
-
-      // 주당 목표 높이(px)
-      const available = Math.max(50, wrapH - sumWeeknumPx - 1); // 여유 1px
-      const perWeek = Math.floor(available / weekIdxs.length);
-
-      // 동일 높이로 분배
-      for (let w=0; w<weekIdxs.length; w++){
-        const start = weekIdxs[w];
-        const end   = (w+1 < weekIdxs.length) ? weekIdxs[w+1] : rows.length;
+      // 주 블록들 수집 + 실측
+      const blocks = weekIdxs.map((start, wIdx) => {
+        const end = (wIdx+1 < weekIdxs.length) ? weekIdxs[wIdx+1] : rows.length;
         const contentRows = rows.slice(start+1, end);
-        if (contentRows.length === 0) continue;
+        const measured = contentRows.reduce((s,tr)=> s + tr.getBoundingClientRect().height, 0);
+        return { contentRows, measured };
+      });
 
-        const basePerRow = Math.max(10, Math.floor(perWeek / contentRows.length));
+      const baseRowH = parseFloat(getComputedStyle(tbl).getPropertyValue('--row-h')) || 26;
+      let targetBlockPx = Math.min(...blocks.map(b => b.measured || Infinity));
+      if (!isFinite(targetBlockPx) || targetBlockPx <= 0) targetBlockPx = baseRowH * TARGET_WEEK_ROWS_HINT;
 
-        contentRows.forEach(tr => {
-          tr.style.setProperty('height', basePerRow + 'px', 'important');
+      // 동일 총높이가 되도록 분배 + 강제 고정(height/min/max)
+      blocks.forEach(b => {
+        const rowsInBlock = Math.max(1, b.contentRows.length);
+        const perH = Math.max(10, Math.floor(targetBlockPx / rowsInBlock));
+        b.contentRows.forEach(tr => {
+          tr.style.setProperty('height', perH + 'px', 'important');
+          tr.style.setProperty('min-height', perH + 'px', 'important');
+          tr.style.setProperty('max-height', perH + 'px', 'important');
           tr.querySelectorAll('td').forEach(td => td.style.setProperty('height','100%','important'));
         });
-
-        // 반올림 오차를 마지막 행에 몰아주기
-        const used = basePerRow * contentRows.length;
-        const leftover = perWeek - used;
+        // 남는 픽셀은 마지막 행에 더해 1px 오차 제거
+        const used = perH * rowsInBlock;
+        const leftover = targetBlockPx - used;
         if (leftover !== 0){
-          const last = contentRows[contentRows.length - 1];
-          last.style.setProperty('height', (basePerRow + leftover) + 'px', 'important');
+          const last = b.contentRows[b.contentRows.length - 1];
+          const add = perH + leftover;
+          last.style.setProperty('height', add + 'px', 'important');
+          last.style.setProperty('min-height', add + 'px', 'important');
+          last.style.setProperty('max-height', add + 'px', 'important');
         }
-      }
+      });
     });
   }
 
@@ -448,7 +453,7 @@
     let fs = parseFloat(getComputedStyle(el).fontSize) || 12;
     for (let i=0; i<10; i++){
       const fitsH = el.scrollHeight <= el.clientHeight;
-      const fitsW = el.clientWidth  <= el.clientWidth;
+      const fitsW = el.scrollWidth  <= el.clientWidth;   /* ← 오타 수정 */
       if (fitsH && fitsW) break;
 
       const hRatio = el.clientHeight / Math.max(el.scrollHeight, 1);
@@ -467,8 +472,6 @@
   /* ===== 공통 ===== */
   function setLoading(msg){ $status.textContent = msg || ''; }
   function showError(e){ console.error(e); setLoading(`오류: ${e?.message || e}`); }
-
-  // ✅ 안전한 문자열 이스케이프 (괄호/따옴표 문제 해결)
   function esc(s){
     const map = {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"};
     return String(s).replace(/[&<>"']/g, ch => map[ch]);
