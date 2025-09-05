@@ -25,12 +25,15 @@
   .table-wrap{ overflow:auto; }
   table{
     border-collapse:separate; border-spacing:0; width:100%; table-layout:fixed;
-    --row-h: 26px;      /* 기본 콘텐츠 행 높이(통일 기준 아님, 초기값) */
 
-    /* 날짜(숫자) 줄만 얇게 — 필요시 이 3개로만 조절 */
-    --weeknum-h: 10px;  /* 날짜줄 높이 */
-    --weeknum-font: 8px;/* 날짜 숫자 폰트 */
-    --weeknum-pad-v: 1px; --weeknum-pad-h: 3px;
+    /* 기본 콘텐츠 행 높이(초기값) */
+    --row-h: 26px;
+
+    /* ↓ 날짜(숫자) 줄만 얇게 — 여기만 수정하면 숫자줄 크기 조절됨 */
+    --weeknum-h: 10px;   /* 날짜줄 높이 */
+    --weeknum-font: 8px; /* 날짜 숫자 폰트 */
+    --weeknum-pad-v: 1px;
+    --weeknum-pad-h: 3px;
   }
   tbody tr{ height: var(--row-h); }
 
@@ -44,7 +47,7 @@
     border-color: transparent;
   }
 
-  /* 기본 테두리는 감춤 → 내용/강한 배경만 표시 */
+  /* 기본 테두리는 감춤 → 내용/진한 배경만 표시 */
   td{
     border:1px solid transparent;
     padding:3px 6px;
@@ -52,7 +55,7 @@
     word-break:break-word;
     font-size:12px;
     line-height:1.15;
-    overflow:hidden;              /* 셀은 커지지 않도록 */
+    overflow:hidden; /* 셀은 절대 커지지 않음 */
   }
   td.bordered{ border-color:#e6e6e6; }
 </style>
@@ -78,11 +81,11 @@
   </div>
 
 <script>
-  /* 주간 간격 완전 통일 옵션
-     - 가장 작은 주 간격을 기준으로 모두 맞춤 (콘텐츠가 많던 주도 강제 축소)
-     - 그 뒤 글자 축소 → 다시 통일 2pass */
-  const TARGET_WEEK_ROWS_HINT = 4; // 실패 대비 기본 힌트(측정 못할 때 사용)
+  /* ===== 옵션 ===== */
+  // 통일 목표가 잘 못 잡힐 경우를 위한 힌트(주당 콘텐츠 높이 = 행높이*힌트)
+  const TARGET_WEEK_ROWS_HINT = 4;
 
+  /* ===== 레이아웃 ===== */
   function relayout(){
     const nav  = document.getElementById('nav');
     const top  = document.getElementById('top-bar');
@@ -95,6 +98,7 @@
   window.addEventListener('load', relayout);
   window.addEventListener('resize', () => { relayout(); unifyWeeksStrict(); shrinkAllText(); unifyWeeksStrict(); });
 
+  /* ===== 데이터 ===== */
   const api = (qs) => `/api/schedule${qs ? ('?' + qs) : ''}`;
   const $select  = document.getElementById('sheetSelect');
   const $refresh = document.getElementById('refreshBtn');
@@ -110,6 +114,7 @@
   init().catch(showError);
 
   async function init(){
+    // 시트 목록(5분 캐시)
     let sheets = null;
     try{
       const cached = JSON.parse(sessionStorage.getItem('sheets:v1') || 'null');
@@ -162,6 +167,7 @@
     }
   }
 
+  /* ===== 네트워크 유틸 ===== */
   async function fetchJsonRetry(url, { retries = 5, signal } = {}){
     let attempt = 0;
     while (true){
@@ -188,6 +194,7 @@
     }
   }
 
+  /* ===== 렌더 유틸 ===== */
   function parseMonth(sheetName){
     const m = parseInt(String(sheetName).replace(/\D+/g,''),10);
     return isNaN(m) ? (new Date().getMonth()+1) : m;
@@ -219,6 +226,7 @@
     return String(cell?.text ?? '').trim();
   }
 
+  // "작은 날짜 숫자" 줄 감지(텍스트 기반)
   function isWeekNumberRow(rowCells, cols){
     let countDigits = 0, countCells = 0;
     for(let c=0; c<cols; c++){
@@ -231,6 +239,7 @@
     return countDigits >= Math.max(5, Math.floor(cols*0.6));
   }
 
+  /* ===== 렌더 ===== */
   function renderTeam(team, { sheetName, year } = {}){
     const card = document.createElement('section'); card.className = 'card';
     const bar  = document.createElement('div'); bar.className = 'teambar'; bar.textContent = `${team.id}팀`; card.appendChild(bar);
@@ -245,6 +254,7 @@
     let dayCounter = 1;
     let weekIdx    = -1;
 
+    // 병합 반영한 그리드
     const grid = Array.from({length: team.rows}, () => Array(team.cols).fill(null));
     for (const cell of team.cells){
       const r0 = cell.r - 1, c0 = cell.c - 1;
@@ -260,6 +270,7 @@
 
     for (let r=0; r<team.rows; r++){
       const tr = document.createElement('tr');
+
       const weekNumberRow = isWeekNumberRow(grid[r], team.cols);
       if (weekNumberRow) { weekIdx++; tr.dataset.weekrow = '1'; }
 
@@ -296,6 +307,7 @@
             if (cell.html && textNow !== '') td.innerHTML = cell.html;
             else { if (cell.fc) td.style.color = cell.fc; td.textContent = textNow; }
 
+            // 전폭 회색 + 비어있음 → 'N일(요일)' 자동 표기
             const colspan = cell.colspan || 1;
             const looksEmpty = (textNow === '');
             const nearFullWidth = (team.cols - colspan) <= 1;
@@ -324,27 +336,39 @@
     return card;
   }
 
-  /* === 주간 간격 완전 통일(실측 기반) === */
+  /* ===== 주간 간격 “완전 통일” =====
+     1) 날짜줄 인덱스 찾기(텍스트 또는 '얇은 높이'로 보정)
+     2) 각 주의 콘텐츠 총높이 실측 → 가장 작은 값으로 모두 맞춤
+  */
   function unifyWeeksStrict(){
     document.querySelectorAll('.table-wrap table').forEach(tbl => {
       const rows = Array.from(tbl.querySelectorAll('tr'));
-      const weekIdxs = rows.map((tr,i)=>tr.dataset.weekrow==='1'?i:-1).filter(i=>i>=0);
+      if (rows.length === 0) return;
+
+      // 1) 날짜줄 후보(텍스트 마킹)
+      let weekIdxs = rows.map((tr,i)=>tr.dataset.weekrow==='1'?i:-1).filter(i=>i>=0);
+
+      // 보정: 혹시 못 찾았으면, '얇은 높이' 기준으로도 찾기
+      if (weekIdxs.length === 0){
+        const cap = (parseFloat(getComputedStyle(tbl).getPropertyValue('--weeknum-h')) || 12) + 2;
+        weekIdxs = rows.map((tr,i)=> tr.clientHeight <= cap ? i : -1).filter(i=>i>=0);
+      }
       if (weekIdxs.length === 0) return;
 
-      // 각 주 콘텐츠 구간과 실측 높이 계산
+      // 2) 주 블록들의 실측 높이
       const blocks = weekIdxs.map((start, wIdx) => {
         const end = (wIdx+1 < weekIdxs.length) ? weekIdxs[wIdx+1] : rows.length;
         const contentRows = rows.slice(start+1, end);
-        const h = contentRows.reduce((s,tr)=> s + tr.getBoundingClientRect().height, 0);
-        return { contentRows, h };
+        const measured = contentRows.reduce((s,tr)=> s + tr.getBoundingClientRect().height, 0);
+        return { contentRows, measured };
       });
 
-      // 목표 높이: 실측 중 최소값(가장 작은 주)에 맞춤. 실측 실패 시 힌트값 사용
-      const hint = (parseFloat(getComputedStyle(tbl).getPropertyValue('--row-h')) || 26) * TARGET_WEEK_ROWS_HINT;
-      let targetBlockPx = Math.min(...blocks.map(b=>b.h || Infinity));
-      if (!isFinite(targetBlockPx) || targetBlockPx <= 0) targetBlockPx = hint;
+      // 목표 높이 = 실측 최소값 (실패 시 힌트)
+      const baseRowH = parseFloat(getComputedStyle(tbl).getPropertyValue('--row-h')) || 26;
+      let targetBlockPx = Math.min(...blocks.map(b => b.measured || Infinity));
+      if (!isFinite(targetBlockPx) || targetBlockPx <= 0) targetBlockPx = baseRowH * TARGET_WEEK_ROWS_HINT;
 
-      // 각 주의 행 높이를 균등 분배
+      // 3) 각 주를 동일 총높이가 되도록, 그 주의 행수로 균등 분배
       blocks.forEach(b => {
         const perH = targetBlockPx / Math.max(1, b.contentRows.length);
         b.contentRows.forEach(tr => { tr.style.height = perH + 'px'; });
@@ -352,7 +376,7 @@
     });
   }
 
-  /* === 글자 자동 축소 === */
+  /* ===== 글자 자동 축소 ===== */
   function shrinkAllText(){
     const MIN = 8;   // 더 작게 필요하면 7로
     const MAX = 12;
@@ -388,6 +412,7 @@
     }
   }
 
+  /* ===== 공통 ===== */
   function setLoading(msg){ $status.textContent = msg || ''; }
   function showError(e){ console.error(e); setLoading(`오류: ${e?.message || e}`); }
   function esc(s){ return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
