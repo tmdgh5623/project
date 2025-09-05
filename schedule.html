@@ -56,7 +56,6 @@
     height:100%;
     box-sizing:border-box;
   }
-
   /* 내용 래퍼(넘침 감지/축소용) */
   td > .cell{ display:block; height:100%; overflow:hidden; }
 
@@ -104,9 +103,13 @@
     page.style.height = `calc(100vh - ${navH + topH}px)`;
   }
   window.addEventListener('load', relayout);
+
+  /* 초기/스크롤바로 인한 폭 변화 등 디바운스 */
+  let resizeTimer=null;
   window.addEventListener('resize', () => {
     relayout();
-    unifyWeeksByMax(); // 뷰포트 변경 시에도 재계산
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(()=> unifyWeeksByMax(), 50);
   });
 
   /* ===== 데이터 ===== */
@@ -167,14 +170,29 @@
       setLoading('');
       relayout();
 
-      // 순서 중요
+      /* ==== 순서 & 안정화 대기 ==== */
       resetFonts();
-      autoSplitSchedules();   // 스케줄 텍스트 분할(빨간줄 제외)
+      autoSplitSchedules();
+
+      await settleLayout();   // 분할 후 레이아웃/폰트 확정 대기
       shrinkAllText();
-      unifyWeeksByMax();      // ★ 모든 팀/모든 주간의 스케줄/기타 높이 일치
+
+      await settleLayout();   // 폰트 축소 반영 후 다시 대기
+      unifyWeeksByMax();      // 1차 통일
+      requestAnimationFrame(unifyWeeksByMax); // 2차 스냅(스크롤바/폰트로 인한 미세 변화 흡수)
     }catch(e){
       if (e.name === 'AbortError') return;
       showError(e);
+    }
+  }
+
+  /* ===== 프레임/폰트 안정화 유틸 ===== */
+  function nextFrame(){ return new Promise(r => requestAnimationFrame(()=>r())); }
+  async function settleLayout(){
+    await nextFrame();              // 1프레임 대기
+    await nextFrame();              // 추가 1프레임(분할/축소 반영)
+    if (document.fonts?.ready) {    // 폰트 로딩 완료 대기(지원 브라우저)
+      try { await document.fonts.ready; } catch {}
     }
   }
 
@@ -527,7 +545,7 @@
   function setLoading(msg){ $status.textContent = msg || ''; }
   function showError(e){ console.error(e); setLoading(`오류: ${e?.message || e}`); }
   function esc(s){
-    const map = {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"};
+    const map = {"&":"&amp;","<":"&lt;","<": "&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"};
     return String(s).replace(/[&<>"']/g, ch => map[ch]);
   }
 </script>
