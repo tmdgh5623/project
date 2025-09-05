@@ -220,7 +220,7 @@
     return false;
   }
 
-  /* 🔸 빨간(사람이름/연차 등) 배경 판별: 밴드 행 구분용 */
+  /* 빨간(사람이름/연차 등) 배경 판별: 밴드 행 구분용 */
   function isRedishColor(c){
     if(!c) return false;
     c = String(c).trim().toLowerCase();
@@ -297,8 +297,8 @@
       const weekNumberRow = isWeekNumberRow(grid[r], team.cols);
       if (weekNumberRow) { weekIdx++; tr.dataset.weekrow = '1'; }
 
-      // ✅ 이 행의 역할을 추적: schedule(일정) / band(빨간) / empty
-      let rowKind = 'empty';
+      // 이 행의 역할을 추적: schedule(일정) / band(빨간) / empty
+      let redCnt = 0, nonRedCnt = 0;
 
       for (let c=0; c<team.cols; c++){
         const cell = grid[r][c];
@@ -313,12 +313,9 @@
 
           const textNow = visibleText(cell);
 
-          // 🔸 주 숫자줄이 아니라면, 이 행이 '밴드'인지 '스케줄'인지 체크
-          if (!weekNumberRow){
-            if (textNow){
-              if (isRedishColor(cell.bg)) rowKind = 'band';
-              else if (rowKind !== 'band') rowKind = 'schedule';
-            }
+          // 행 타입 판정용 카운트(주 숫자줄 제외)
+          if (!weekNumberRow && textNow){
+            if (isRedishColor(cell.bg)) redCnt++; else nonRedCnt++;
           }
 
           if (weekNumberRow){
@@ -364,8 +361,11 @@
         tr.appendChild(td);
       }
 
-      // 🔸 주 숫자줄이 아니면, 이 행의 역할 라벨을 저장
-      if (!weekNumberRow) tr.dataset.kind = rowKind;
+      // 주 숫자줄이 아니면, 이 행의 역할 라벨 저장
+      if (!weekNumberRow){
+        tr.dataset.kind = (redCnt > 0 && nonRedCnt === 0) ? 'band' :
+                          (nonRedCnt > 0 ? 'schedule' : 'empty');
+      }
 
       table.appendChild(tr);
     }
@@ -412,10 +412,10 @@
     }
   }
 
-  /* ===== 주간 간격 “스케줄 행만 통일” =====
+  /* ===== 주간 간격 “스케줄 행만 균등” =====
      - 각 주의 행들 중 data-kind="schedule" 만 모음
      - 그 주들의 스케줄 총높이 중 최대값을 target으로 사용
-     - 각 주에서 스케줄 행만 균일 분배(밴드 행은 원래 높이 유지)
+     - 각 주에서 스케줄 행만 균일 분배(밴드/빈칸 행은 원래 높이 유지)
   */
   function unifyWeeksByMax(){
     document.querySelectorAll('.table-wrap table').forEach(tbl => {
@@ -423,7 +423,7 @@
       if (rows.length === 0) return;
 
       // 날짜줄 인덱스
-      let weekIdxs = rows.map((tr,i)=> tr.dataset.weekrow==='1' ? i : -1).filter(i=>i>=0);
+      const weekIdxs = rows.map((tr,i)=> tr.dataset.weekrow==='1' ? i : -1).filter(i=>i>=0);
       if (weekIdxs.length === 0) return;
 
       // 주별 스케줄행만 집계
