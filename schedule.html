@@ -23,30 +23,28 @@
   .card{ border:1px solid #e5e7eb; border-radius:12px; overflow:visible; background:#fff; box-shadow:0 1px 4px rgba(0,0,0,.04); }
   .teambar{ background:#e9eef5; border-bottom:1px solid #dbe2ea; color:#1f2937; font-size:12px; font-weight:700; letter-spacing:.2px; padding:8px 12px; }
 
-  /* ===== 달력(2번 스타일) 기본 변수 ===== */
+  /* ===== 균일 주간 레이아웃 변수 ===== */
   :root{
-    --week-h: 150px;     /* 스케줄 영역(한 주) 높이 */
-    --date-h: 20px;      /* 각 주 상단 날짜 숫자줄 높이 */
-    --band-h: 26px;      /* 빨간 밴드 한 줄 높이 */
+    --week-h: 150px;    /* 스케줄(한 주) 높이 */
+    --date-h: 20px;     /* 날짜 숫자줄 높이 */
+    --band-h: 26px;     /* 빨간 밴드 한 줄 높이 */
   }
 
   .table-wrap{ padding:10px; }
 
-  /* 팀별 상단 요일 바(원하는 색으로 튜닝 가능) */
+  /* 요일 바 */
   .dow-bar{
     display:grid; grid-template-columns:repeat(7,1fr);
-    gap:0; border:1px solid #e6e6e6; border-bottom:none; border-radius:8px 8px 0 0; overflow:hidden;
-    background:#efe3a6; /* 1번 이미지 톤에 가까운 은은한 노랑 */
-    font-weight:700; font-size:12px; color:#111;
+    border:1px solid #e6e6e6; border-bottom:none; border-radius:8px 8px 0 0;
+    background:#efe3a6; font-weight:700; font-size:12px; color:#111; overflow:hidden;
   }
   .dow-bar div{ padding:6px 8px; text-align:center; border-right:1px solid #e6e6e6; }
   .dow-bar div:last-child{ border-right:none; }
   .dow-bar .sun{ color:#d11; }
   .dow-bar .sat{ color:#1d4ed8; }
 
-  /* 주 블록 */
+  /* 주 컨테이너 */
   .week{ border:1px solid #e6e6e6; border-top:none; }
-  .week + .week{ border-top:none; }
   .week:last-child{ border-radius:0 0 8px 8px; overflow:hidden; }
 
   /* 스케줄 그리드 */
@@ -58,13 +56,17 @@
     height: var(--week-h);
     background:#fff;
   }
-  /* 세로 보조선 */
+  /* 세로선 + 가로 레인 보조선 */
   .week-grid::before{
     content:""; position:absolute; inset:0;
     background:
       repeating-linear-gradient(to right,
         transparent, transparent calc((100%/7) - 1px),
-        #e6e6e6 calc((100%/7) - 1px), #e6e6e6 calc(100%/7));
+        #e6e6e6 calc((100%/7) - 1px), #e6e6e6 calc(100%/7)),
+      repeating-linear-gradient(to bottom,
+        transparent var(--date-h), transparent calc(var(--date-h) + ((100% - var(--date-h)) / var(--lanes) - 1px)),
+        #f5f5f5 calc(var(--date-h) + ((100% - var(--date-h)) / var(--lanes) - 1px)),
+        #f5f5f5 calc(var(--date-h) + ((100% - var(--date-h)) / var(--lanes))));
     pointer-events:none;
   }
 
@@ -74,15 +76,20 @@
   .day-num.sat{ color:#1d4ed8; font-weight:700; }
   .day-num.dim{ color:#9ca3af; font-weight:600; }
 
-  /* 이벤트(일정) 카드 */
+  /* 이벤트 카드 */
   .ev{ position:relative; margin:2px 3px; border:1px solid rgba(0,0,0,.15); border-radius:4px; overflow:hidden; }
   .ev .cell{ padding:3px 5px; font-size:12px; line-height:1.15; overflow:hidden; display:block; }
 
-  /* 빨간 밴드(이름/연차) – 스케줄 아래에 원본 높이로 별도 렌더 */
+  /* 밴드(빨간 줄) */
   .bands{ border-top:1px dashed #e6e6e6; background:#fff; }
-  .band-row{ display:grid; grid-template-columns:repeat(7,1fr); height:var(--band-h); }
-  .band-cell{ border-right:1px solid #f0f0f0; border-bottom:1px solid #f0f0f0; padding:3px 6px; font-size:12px; line-height:1.15; overflow:hidden; }
-  .band-row .band-cell:last-child{ border-right:none; }
+  .band-row{ position:relative; display:grid; grid-template-columns:repeat(7,1fr); height:var(--band-h); }
+  .band-row::before{ /* 밴드 줄도 세로선 고정 */
+    content:""; position:absolute; inset:0; pointer-events:none;
+    background:repeating-linear-gradient(to right,
+      transparent, transparent calc((100%/7) - 1px),
+      #f0f0f0 calc((100%/7) - 1px), #f0f0f0 calc(100%/7));
+  }
+  .band-cell{ padding:3px 6px; font-size:12px; line-height:1.15; overflow:hidden; border-bottom:1px solid #f0f0f0; }
 </style>
 </head>
 <body>
@@ -106,11 +113,11 @@
   </div>
 
 <script>
-  /* ============ 옵션 ============ */
-  const MIN_FONT_PX = 9;   // 글자 최소 크기 (과도한 축소 방지)
+  /* ===== 옵션 ===== */
+  const MIN_FONT_PX = 9;
   const MAX_FONT_PX = 12;
 
-  /* ============ 레이아웃 ============ */
+  /* ===== 레이아웃 ===== */
   function relayout(){
     const nav  = document.getElementById('nav');
     const top  = document.getElementById('top-bar');
@@ -123,11 +130,10 @@
   window.addEventListener('load', relayout);
   window.addEventListener('resize', () => {
     relayout();
-    // 리사이즈 시 일정 텍스트 재축소
     document.querySelectorAll('.ev .cell, .band-cell').forEach(el => shrinkToFit(el, MIN_FONT_PX));
   });
 
-  /* ============ 데이터 ============ */
+  /* ===== 데이터 ===== */
   const api = (qs) => `/api/schedule${qs ? ('?' + qs) : ''}`;
   const $select  = document.getElementById('sheetSelect');
   const $refresh = document.getElementById('refreshBtn');
@@ -185,7 +191,6 @@
       setLoading('');
       relayout();
 
-      // 글자 축소(초기 1회)
       document.querySelectorAll('.ev .cell, .band-cell').forEach(el => shrinkToFit(el, MIN_FONT_PX));
     }catch(e){
       if (e.name === 'AbortError') return;
@@ -193,7 +198,7 @@
     }
   }
 
-  /* ============ 네트워크 유틸 ============ */
+  /* ===== 네트워크 유틸 ===== */
   async function fetchJsonRetry(url, { retries = 5, signal } = {}){
     let attempt = 0;
     while (true){
@@ -220,7 +225,7 @@
     }
   }
 
-  /* ============ 공통 유틸 ============ */
+  /* ===== 공통 유틸 ===== */
   function parseMonth(sheetName){
     const m = parseInt(String(sheetName).replace(/\D+/g,''),10);
     return isNaN(m) ? (new Date().getMonth()+1) : m;
@@ -242,7 +247,7 @@
     return false;
   }
 
-  // 빨간 밴드 배경 판별
+  // 빨간(밴드) 색 판별
   function isRedishColor(c){
     if(!c) return false;
     c = String(c).trim().toLowerCase();
@@ -283,13 +288,13 @@
     return countDigits >= Math.max(5, Math.floor(cols*0.6));
   }
 
-  /* ============ 팀 렌더러: 균일 격자 + 자동 배치 + 밴드 분리 ============ */
+  /* ===== 팀 렌더러: rowspan 무시 + 균일 격자 + 자동 레인 + 밴드 분리 ===== */
   function renderTeamUniform(team, { sheetName, year } = {}){
     const card = document.createElement('section'); card.className = 'card';
     const bar  = document.createElement('div'); bar.className = 'teambar'; bar.textContent = `${team.id}팀`; card.appendChild(bar);
     const wrap = document.createElement('div'); wrap.className = 'table-wrap'; card.appendChild(wrap);
 
-    // 상단 요일 바
+    // 요일 바
     const dow = ['일요일(Sun)','월요일(Mon)','화요일(Tue)','수요일(Wed)','목요일(Thu)','금요일(Fri)','토요일(Sat)'];
     const dowBar = document.createElement('div'); dowBar.className = 'dow-bar';
     dow.forEach((name,i) => {
@@ -303,7 +308,9 @@
     const lastDay  = daysInMonth(year, month);
     const firstDow = new Date(year, month-1, 1).getDay();
 
-    // 1) 병합 반영 그리드 생성
+    /* 1) 병합 반영 그리드 생성 (anchor만 사용)
+       - rowspan은 무시하려고 anchor만 읽고, 세로 확장은 고려하지 않음
+    */
     const grid = Array.from({length: team.rows}, () => Array(team.cols).fill(null));
     for (const cell of team.cells){
       const r0 = cell.r - 1, c0 = cell.c - 1;
@@ -316,57 +323,53 @@
       }
     }
 
-    // 2) 주(week) 구간 계산
+    /* 2) 주(week) 경계 계산 */
     const weekStartIdx = [];
     for (let r=0; r<team.rows; r++) if (isWeekNumberRow(grid[r], team.cols)) weekStartIdx.push(r);
     const weeks = weekStartIdx.map((start, i) => {
-      const end = (i+1 < weekStartIdx.length) ? weekStartIdx[i+1] : team.rows; // 다음 주 시작 전까지
+      const end = (i+1 < weekStartIdx.length) ? weekStartIdx[i+1] : team.rows;
       return { r0:start, r1:end };
     });
 
-    // 3) 주 단위로 CSS Grid 출력
+    /* 3) 주별 렌더링 */
     weeks.forEach((wk, wIdx) => {
-      // 이벤트/밴드 수집
       const events = [];
-      const bandRows = []; // [{cells:[{startCol, span, text, bg, fc}]}] – 빨간 줄을 원본 순서대로
+      const bandRows = []; // 빨간 줄 모음(원본 순서 유지)
 
       for (let r = wk.r0+1; r < wk.r1; r++){
-        // 이 줄이 밴드인지 판단: 빨간 셀만 있고 텍스트가 존재하면 밴드
+        // 이 줄이 "밴드"인지 판단: 텍스트 있는 anchor들의 bg가 전부 빨강 계열이면 밴드
         let hasText=false, redOnly=true;
         for(let c=0;c<team.cols;c++){
-          const cell = grid[r][c];
-          if(!cell || cell==='skip') continue;
+          const cell = grid[r][c]; if(!cell || cell==='skip') continue;
           const t = visibleText(cell); if(!t) continue;
           hasText=true; if(!isRedishColor(cell.bg)) redOnly=false;
         }
 
         if (hasText && redOnly){
-          // 밴드 줄로 저장
-          const band = { cells:[] };
+          const br = { cells:[] };
           for(let c=0;c<team.cols;c++){
             const cell = grid[r][c]; if(!cell || cell==='skip') continue;
-            const txt = visibleText(cell); if(!txt) continue;
+            const t = visibleText(cell); if(!t) continue;
             const span = Math.max(1, cell.colspan || 1);
             const startCol = c + 1;
-            band.cells.push({ startCol, span: Math.min(span, team.cols - c), text: txt, bg: cell.bg, fc: cell.fc });
+            br.cells.push({ startCol, span: Math.min(span, team.cols - c), text: t, bg: cell.bg, fc: cell.fc });
           }
-          bandRows.push(band);
-        } else {
-          // 스케줄 이벤트로 수집(회색/빈칸 제외)
-          for (let c=0;c<team.cols;c++){
+          bandRows.push(br);
+        }else{
+          for(let c=0;c<team.cols;c++){
             const cell = grid[r][c]; if(!cell || cell==='skip') continue;
-            const txt = visibleText(cell); if(!txt) continue;
+            const t = visibleText(cell); if(!t) continue;
             if (isRedishColor(cell.bg)) continue; // 밴드는 위에서 처리
             const span = Math.max(1, cell.colspan || 1);
             const startCol = c + 1;
-            events.push({ startCol, span: Math.min(span, team.cols - c), text: txt, bg: cell.bg, fc: cell.fc });
+            events.push({ startCol, span: Math.min(span, team.cols - c), text: t, bg: cell.bg, fc: cell.fc });
           }
         }
       }
 
-      // 레인 배치(겹치지 않게 위→아래 차례대로)
+      // 자동 레인 배치(겹치지 않게)
       events.sort((a,b)=> a.startCol - b.startCol || b.span - a.span);
-      const lanes = []; // [{endCol: number}]
+      const lanes = [];
       for(const ev of events){
         let placed = false;
         for (let i=0; i<lanes.length; i++){
@@ -385,7 +388,7 @@
 
       // 날짜 숫자 7칸
       for (let col=0; col<7; col++){
-        const pos     = (wIdx * 7) + col - firstDow + 1; // 달력 날짜
+        const pos     = (wIdx * 7) + col - firstDow + 1;
         const inMonth = (pos >= 1 && pos <= lastDay);
         let dow;
         if (inMonth) dow = new Date(year, month-1, pos).getDay();
@@ -402,46 +405,24 @@
         gridEl.appendChild(d);
       }
 
-      // 이벤트 카드 추가
+      // 이벤트 카드 추가(색/글자색은 원본 그대로)
       for(const ev of events){
         const e = document.createElement('div'); e.className = 'ev';
         e.style.gridColumn = `${ev.startCol} / ${ev.startCol + ev.span}`;
-        e.style.gridRow    = `${(ev.lane||0)+2}`; // 1은 날짜줄, 그래서 +2
+        e.style.gridRow    = `${(ev.lane||0)+2}`;
         if (ev.bg && !isGrayColor(ev.bg)) e.style.background = ev.bg;
         if (ev.fc) e.style.color = ev.fc;
-        e.title = ev.text;
-
         const inner = document.createElement('div'); inner.className = 'cell'; inner.textContent = ev.text;
         e.appendChild(inner); gridEl.appendChild(e);
       }
 
       weekEl.appendChild(gridEl);
 
-      // 밴드 줄들(원본처럼 높이 고정, 스케줄과 별개)
+      // 밴드 줄(스케줄 아래, 고정높이)
       if (bandRows.length){
         const bands = document.createElement('div'); bands.className = 'bands';
         for (const br of bandRows){
           const row = document.createElement('div'); row.className = 'band-row';
-          // 빈 칸까지 표현하기 위해 7칸 전체 채움
-          // 우선 빈 cell로 초기화
-          for(let i=0;i<7;i++){
-            const cell = document.createElement('div'); cell.className = 'band-cell'; row.appendChild(cell);
-          }
-          // 합쳐진 칸 반영
-          for (const c of br.cells){
-            const cell = document.createElement('div'); cell.className = 'band-cell';
-            if (c.bg) cell.style.background = c.bg;
-            if (c.fc) cell.style.color = c.fc;
-            cell.textContent = c.text;
-            // 기존 자리에 덮어씌우기
-            // grid는 아니니 span 만큼 다음 형제 삭제하고 이 셀을 colspan처럼 병합한 느낌으로 만들기
-            // 대신, 간단하게는 스타일로 grid-column 쓰기 위해 row를 display:grid로 만들었음
-            cell.style.gridColumn = `${c.startCol} / ${c.startCol + c.span}`;
-            // row가 grid이므로 기존 placeholder는 필요 없음 -> row.innerHTML 초기화 방식 대신, 아래처럼 다시 구성
-          }
-          // 다시 grid 방식으로 배치
-          row.innerHTML = ''; // 비움
-          // grid child로 채움
           br.cells.forEach(c=>{
             const cell = document.createElement('div'); cell.className = 'band-cell';
             if (c.bg) cell.style.background = c.bg;
@@ -461,7 +442,7 @@
     return card;
   }
 
-  /* ============ 텍스트 축소 ============ */
+  /* ===== 텍스트 축소 ===== */
   function shrinkToFit(el, minPx){
     if (!el) return; if (!el.textContent.trim() && el.children.length === 0) return;
     let fs = parseFloat(getComputedStyle(el).fontSize) || MAX_FONT_PX;
@@ -481,10 +462,10 @@
     }
   }
 
-  /* ============ 공통 ============ */
+  /* ===== 공통 ===== */
   function setLoading(msg){ $status.textContent = msg || ''; }
   function showError(e){ console.error(e); setLoading(`오류: ${e?.message || e}`); }
-  function esc(s){ const map = {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}; return String(s).replace(/[&<>"']/g, ch => map[ch]); }
+  function esc(s){ const map = {"&":"&amp;","<":"&lt;","<": "&lt;", ">":"&gt;","\"":"&quot;","'":"&#39;"}; return String(s).replace(/[&<>"']/g, ch => map[ch]); }
 </script>
 </body>
 </html>
