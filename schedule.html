@@ -61,6 +61,11 @@
 
   /* 일정 항목 블록(자동 분할 결과) */
   td .it{ display:block; margin-bottom:2px; }
+
+  /* ▼ 선택 옵션: 내부 가로 경계선 공유 방향 고정(원하면 주석 해제)
+  .table-wrap table td { border-top-width:0; }
+  tr[data-weekrow="1"] td { border-top-width:1px; } 
+  */
 </style>
 </head>
 <body>
@@ -441,7 +446,7 @@
       const weeks = blocks.map(block=>{
         const schedRows = [];
         const noteRows  = [];
-        block.forEach((tr,i)=>{
+        block.forEach((tr)=>{
           const tds = Array.from(tr.querySelectorAll('td'));
           const [rSum, spanSum] = tds.reduce((acc,td)=>{
             const span = td.colSpan || 1;
@@ -450,10 +455,8 @@
             return [acc[0]+isR, acc[1]+span];
           }, [0,0]);
           const redRatio = spanSum ? (rSum/spanSum) : 0;
-
-          // 붉은색(인원/기타) 비율이 높은 줄은 noteRows, 나머지는 스케줄
-          if (redRatio >= 0.3) noteRows.push(tr);
-          else schedRows.push(tr);
+          if (redRatio >= 0.3) noteRows.push(tr);   // 인원·기타(붉은줄)
+          else schedRows.push(tr);                  // 스케줄(노랑+흰공란 포함)
         });
 
         const schedH = schedRows.reduce((s,tr)=> s + tr.getBoundingClientRect().height, 0);
@@ -467,29 +470,42 @@
     const maxWeeks = Math.max(...structures.map(s=>s.weeks.length), 0);
     if (!maxWeeks) return;
 
-    // 주번호별 전 테이블 최대 높이(스케줄/인원·기타) 계산
+    // 주번호별 전 테이블 최대 높이(스케줄/인원·기타) 계산(반올림하여 고정)
     const targets = Array.from({length:maxWeeks}, ()=>({sched:0, note:0}));
     for (let w=0; w<maxWeeks; w++){
       for (const s of structures){
         const wk = s.weeks[w]; if (!wk) continue;
-        if (wk.schedH > targets[w].sched) targets[w].sched = wk.schedH;
-        if (wk.noteH  > targets[w].note ) targets[w].note  = wk.noteH;
+        targets[w].sched = Math.max(targets[w].sched, Math.round(wk.schedH));
+        targets[w].note  = Math.max(targets[w].note , Math.round(wk.noteH));
       }
     }
 
-    // 균등 분배(잔여 px는 마지막 행에 가산)
+    // 균등 분배 + 테두리/반올림 최종 보정
     function distribute(rowsArr, target){
       if (!rowsArr || !rowsArr.length || !isFinite(target) || target<=0) return;
+
+      // 1) 1차 균등 배분
       const base = Math.max(10, Math.floor(target / rowsArr.length));
       rowsArr.forEach(tr=>{
         tr.style.height = base + 'px';
         tr.querySelectorAll('td').forEach(td=> td.style.height = '100%');
       });
-      const used = base * rowsArr.length;
-      const leftover = (target - used) | 0;
-      if (leftover){
+
+      // 2) 남는 px 마지막 행에 할당
+      let used = base * rowsArr.length;
+      let leftover = Math.round(target - used);
+      if (leftover !== 0) {
         const last = rowsArr[rowsArr.length-1];
         last.style.height = (base + leftover) + 'px';
+      }
+
+      // 3) 실제 렌더 합계 기준 최종 보정(경계선 공유/반올림 흡수)
+      const total = rowsArr.reduce((s,tr)=> s + tr.getBoundingClientRect().height, 0);
+      const delta = Math.round(target - total);
+      if (delta !== 0) {
+        const last = rowsArr[rowsArr.length-1];
+        const cur = parseFloat(getComputedStyle(last).height) || base;
+        last.style.height = (cur + delta) + 'px';
       }
     }
 
@@ -506,7 +522,7 @@
   function setLoading(msg){ $status.textContent = msg || ''; }
   function showError(e){ console.error(e); setLoading(`오류: ${e?.message || e}`); }
   function esc(s){
-    const map = {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"};
+    const map = {"&":"&amp;","<":"&lt;","~":"&tilde;","\"":"&quot;","'":"&#39;"};
     return String(s).replace(/[&<>"']/g, ch => map[ch]);
   }
 </script>
