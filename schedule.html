@@ -23,15 +23,16 @@
   .card{ border:1px solid #e5e7eb; border-radius:12px; overflow:visible; background:#fff; box-shadow:0 1px 4px rgba(0,0,0,.04); }
   .teambar{ background:#e9eef5; border-bottom:1px solid #dbe2ea; color:#1f2937; font-size:12px; font-weight:700; letter-spacing:.2px; padding:8px 12px; }
 
-  /* ===== "표 간격 / 비율 완전 통일"용 새 레이아웃 ===== */
+  /* ===== "표 간격 / 비율 완전 통일"용 레이아웃 ===== */
   :root{
     --week-h: 150px;        /* 한 주 블록 전체 높이(PC) */
     --date-h: 20px;         /* 날짜 숫자 줄 높이 */
+    --band-h: 24px;         /* 빨간 밴드(인원/휴무 등) 고정 높이 */
     --min-font: 9px;        /* 텍스트 축소 하한 */
     --max-font: 12px;       /* 기본 폰트 */
   }
   @media (max-width:980px){
-    :root{ --week-h: 126px; --date-h: 18px; }
+    :root{ --week-h: 126px; --date-h: 18px; --band-h: 22px; }
   }
 
   .table-wrap{ position:relative; overflow:visible; padding:8px 10px 10px; }
@@ -39,7 +40,7 @@
   .week-grid{
     position:relative;
     display:grid; grid-template-columns:repeat(7,1fr);
-    grid-template-rows: var(--date-h) repeat(var(--lanes), 1fr);
+    /* grid-template-rows 는 주별로 JS에서 동적으로 설정 */
     height: var(--week-h);
   }
   /* 날짜(상단) 셀 */
@@ -56,17 +57,15 @@
       repeating-linear-gradient(to right,
         transparent, transparent calc((100%/7) - 1px),
         #e6e6e6 calc((100%/7) - 1px), #e6e6e6 calc(100%/7)
-      ),
-      /* 가로선: 레인 개수만큼 */
-      repeating-linear-gradient(to bottom,
-        transparent, transparent calc(((100% - var(--date-h)) / var(--lanes)) - 1px),
-        #f0f0f0 calc(((100% - var(--date-h)) / var(--lanes)) - 1px), #f0f0f0 calc((100% - var(--date-h)) / var(--lanes))
       );
   }
 
   /* 일정(이벤트) 박스 */
-  .ev{ position:relative; margin:1px 2px; border:1px solid rgba(0,0,0,.15); border-radius:4px; overflow:hidden; }
+  .ev{ position:relative; margin:1px 2px; border:1px solid rgba(0,0,0,.15); border-radius:4px; overflow:hidden; background:#fff; }
   .ev .cell{ font-size:var(--max-font); line-height:1.15; padding:2px 4px; overflow:hidden; display:block; }
+  /* 빨간 밴드 전용 고정 높이 */
+  .ev.band{ height: var(--band-h); align-self: stretch; }
+  .ev.band .cell{ line-height:1.2; font-weight:600; }
 
   /* 헬퍼: 접근성용 툴팁 */
   .ev[title]{ cursor:default; }
@@ -110,8 +109,7 @@
   window.addEventListener('load', relayout);
   window.addEventListener('resize', () => {
     relayout();
-    // 일정 텍스트 재축소
-    document.querySelectorAll('.ev .cell').forEach(el => shrinkToFit(el, MIN_FONT_PX));
+    requestAnimationFrame(()=> document.querySelectorAll('.ev .cell').forEach(el => shrinkToFit(el, MIN_FONT_PX)));
   });
 
   /* ===== 데이터 ===== */
@@ -172,8 +170,11 @@
       setLoading('');
       relayout();
 
-      // 글자 축소(초기 1회)
-      document.querySelectorAll('.ev .cell').forEach(el => shrinkToFit(el, MIN_FONT_PX));
+      // 글자 축소(레이아웃 완료 후 2번 보정)
+      requestAnimationFrame(()=>{
+        document.querySelectorAll('.ev .cell').forEach(el => shrinkToFit(el, MIN_FONT_PX));
+        requestAnimationFrame(()=> document.querySelectorAll('.ev .cell').forEach(el => shrinkToFit(el, MIN_FONT_PX)));
+      });
     }catch(e){
       if (e.name === 'AbortError') return;
       showError(e);
@@ -216,11 +217,10 @@
   function dowKR(y,m,d){ return ['일','월','화','수','목','금','토'][new Date(y, m-1, d).getDay()]; }
 
   function isGrayColor(c){
-    if(!c) return false;
-    c = String(c).trim().toLowerCase();
+    if(!c) return false; c = String(c).trim().toLowerCase();
     const common = ['#fff','#ffffff','#eee','#e6e6e6','#e5e7eb','#f0f0f0','#dddddd','#dcdcdc','#ececec','#efefef','#e9eef5','#f3f4f6','#e0e0e0','#cccccc','white','transparent'];
     if(common.some(x => c.startsWith(x))) return true;
-    const m = c.match(/rgba?\((\d+)[,\s]+(\d+)[,\s]+(\d+)/);
+    const m = c.match(/rgba?\((\d+)[,\s]+(\d+)[,\s]+(\d+)\)/);
     if(m){
       const r=+m[1], g=+m[2], b=+m[3];
       const avg = (r+g+b)/3, maxDiff = Math.max(Math.abs(r-avg), Math.abs(g-avg), Math.abs(b-avg));
@@ -229,6 +229,22 @@
     return false;
   }
 
+  function isRedishColor(c){
+    if(!c) return false; c = String(c).trim().toLowerCase();
+    const quick = ['#f4cccc','#f8d7da','#ffe5e5','#ffd6d6','#fdd','salmon','lightcoral','mistyrose'];
+    if (quick.includes(c)) return true;
+    const hex = c.match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
+    if (hex){
+      let h = hex[1]; if (h.length===3) h = h.split('').map(x=>x+x).join('');
+      const r=parseInt(h.slice(0,2),16), g=parseInt(h.slice(2,4),16), b=parseInt(h.slice(4,6),16);
+      return (r - Math.max(g,b) >= 30) && r >= 140;
+    }
+    const rgb = c.match(/rgba?\((\d+)[,\s]+(\d+)[,\s]+(\d+)\)/);
+    if (rgb){ const r=+rgb[1], g=+rgb[2], b=+rgb[3]; return (r - Math.max(g,b) >= 30) && r >= 140; }
+    return false;
+  }
+
+  // "날짜 숫자만 있는 줄" 감지
   function visibleText(cell){
     if(cell?.html){
       return String(cell.html).replace(/<br\s*\/?>(?=\s|$)/gi,' ')
@@ -238,8 +254,6 @@
     }
     return String(cell?.text ?? '').trim();
   }
-
-  // "날짜 숫자만 있는 줄" 감지
   function isWeekNumberRow(rowCells, cols){
     let countDigits = 0, countCells = 0;
     for(let c=0; c<cols; c++){
@@ -285,28 +299,30 @@
       const weekEl = document.createElement('section');
       weekEl.className = 'week';
 
-      // 이벤트 추출(해당 주의 콘텐츠 영역에서 배경색+텍스트 있는 셀)
-      const events = [];
+      // 이벤트 추출
+      const bandEvents = []; // 빨간 밴드(weekly bar)
+      const normalEvents = [];
       for (let r = wk.r0+1; r < wk.r1; r++){
         for (let c = 0; c < team.cols; c++){
           const cell = grid[r][c];
           if (!cell || cell === 'skip') continue; // 병합의 앵커만 사용
           const txt = visibleText(cell);
-          const bg  = cell.bg || '';
-          if (!txt) continue;                     // 텍스트 없는 가이드/회색 줄은 무시
-          // 수평 병합(colspan)을 멀티데이로 간주
+          if (!txt) continue;
           const span = Math.max(1, cell.colspan || 1);
           const startCol = c + 1;                 // 1..7
-          // 요일칸을 벗어나지 않도록 보정
           const safeSpan  = Math.min(span, team.cols - c);
-          events.push({ startCol, span:safeSpan, text:txt, bg, fc:cell.fc });
+          const bg  = cell.bg || '';
+          const fc  = cell.fc || '';
+          const item = { startCol, span:safeSpan, text:txt, bg, fc };
+          // 규칙: '빨간' + 주에 걸친 긴 막대(>=5칸) → 밴드로 분리 (원본 크기 전용)
+          if (isRedishColor(bg) && safeSpan >= 5) bandEvents.push(item); else normalEvents.push(item);
         }
       }
 
-      // 레인 배치(겹치지 않게 위→아래 차례대로)
-      events.sort((a,b)=> a.startCol - b.startCol || b.span - a.span);
+      // 레인 배치(겹치지 않게): '일반 일정'만 고려
+      normalEvents.sort((a,b)=> a.startCol - b.startCol || b.span - a.span);
       const lanes = []; // [{endCol: number}]
-      for(const ev of events){
+      for(const ev of normalEvents){
         let placed = false;
         for (let i=0; i<lanes.length; i++){
           if (ev.startCol > (lanes[i].endCol || 0)) { lanes[i].endCol = ev.startCol + ev.span - 1; ev.lane = i; placed = true; break; }
@@ -314,10 +330,11 @@
         if (!placed){ ev.lane = lanes.length; lanes.push({ endCol: ev.startCol + ev.span - 1 }); }
       }
 
-      // CSS Grid 컨테이너 만들기
+      // CSS Grid 컨테이너 만들기 (밴드 존재 시 두 번째 행을 밴드 고정 높이로 확보)
       const gridEl = document.createElement('div');
       gridEl.className = 'week-grid';
-      gridEl.style.setProperty('--lanes', Math.max(1, lanes.length || 1));
+      const laneCount = Math.max(1, lanes.length || 1);
+      gridEl.style.gridTemplateRows = `var(--date-h) ${bandEvents.length ? 'var(--band-h) ' : ''}repeat(${laneCount}, 1fr)`;
 
       // 날짜 헤더 7칸
       for (let col=0; col<7; col++){
@@ -334,21 +351,33 @@
         if (dow === 0) d.classList.add('sun');
         if (dow === 6) d.classList.add('sat');
         d.style.gridColumn = (col+1);
-        d.textContent = inMonth ? `${pos}` : `${pos}`; // 비월도 회색으로 표시
+        d.textContent = `${pos}`;
         gridEl.appendChild(d);
       }
 
-      // 이벤트 박스 추가
-      for(const ev of events){
-        const e = document.createElement('div'); e.className = 'ev';
+      // 밴드 이벤트 먼저 추가(두 번째 행 고정)
+      for(const ev of bandEvents){
+        const e = document.createElement('div'); e.className = 'ev band';
         e.style.gridColumn = `${ev.startCol} / ${ev.startCol + ev.span}`;
-        e.style.gridRow    = `${(ev.lane||0)+2}`; // 1은 날짜줄이므로 +2
-        if (ev.bg && !isGrayColor(ev.bg)) e.style.background = ev.bg; else e.style.background = '#fff9c4';
+        e.style.gridRow    = `2`;
+        if (ev.bg) e.style.background = ev.bg; // 원본 색상 유지
         if (ev.fc) e.style.color = ev.fc;
         e.title = ev.text;
+        const inner = document.createElement('div'); inner.className = 'cell'; inner.textContent = ev.text; e.appendChild(inner);
+        gridEl.appendChild(e);
+      }
 
-        const inner = document.createElement('div'); inner.className = 'cell'; inner.textContent = ev.text;
-        e.appendChild(inner); gridEl.appendChild(e);
+      // 일반 이벤트 추가 (밴드가 있으면 3행부터 시작)
+      for(const ev of normalEvents){
+        const e = document.createElement('div'); e.className = 'ev';
+        e.style.gridColumn = `${ev.startCol} / ${ev.startCol + ev.span}`;
+        const baseRow = bandEvents.length ? 3 : 2;
+        e.style.gridRow    = `${(ev.lane||0) + baseRow}`;
+        if (ev.bg) e.style.background = ev.bg; else e.style.background = '#fff';
+        if (ev.fc) e.style.color = ev.fc;
+        e.title = ev.text;
+        const inner = document.createElement('div'); inner.className = 'cell'; inner.textContent = ev.text; e.appendChild(inner);
+        gridEl.appendChild(e);
       }
 
       weekEl.appendChild(gridEl);
@@ -362,7 +391,7 @@
   function shrinkToFit(el, minPx){
     if (!el) return; if (!el.textContent.trim() && el.children.length === 0) return;
     let fs = parseFloat(getComputedStyle(el).fontSize) || MAX_FONT_PX;
-    for (let i=0; i<12; i++){
+    for (let i=0; i<14; i++){
       const fitsH = el.scrollHeight <= el.clientHeight;
       const fitsW = el.scrollWidth  <= el.clientWidth;
       if (fitsH && fitsW) break;
