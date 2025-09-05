@@ -26,13 +26,26 @@
   .table-wrap{ overflow:auto; }
   table{
     border-collapse:separate; border-spacing:0; width:100%; table-layout:fixed;
-    /* ↓ 여기 수치로 간격 조절 */
-    --row-h: 26px;      /* 하루(콘텐츠) 행 높이 */
-    --weeknum-h: 16px;  /* 일자(숫자) 줄 높이 */
+    /* 기본 행 높이(그대로) */
+    --row-h: 26px;
+
+    /* ▼ 일자(숫자) 줄만 줄이기: 여기 3개로 제어 */
+    --weeknum-h: 12px;     /* 줄 높이 */
+    --weeknum-font: 10px;  /* 숫자 폰트 크기 */
+    --weeknum-pad-v: 1px;  /* 위아래 패딩 */
+    --weeknum-pad-h: 3px;  /* 좌우 패딩 */
   }
   tbody tr{ height: var(--row-h); }
-  tr[data-weekrow="1"]{ height: var(--weeknum-h); }   /* 일자(숫자) 줄만 얇게 */
-  tr[data-weekrow="1"] td{ text-align:center; }
+
+  /* 일자(숫자) 줄 — 더 얇고 글씨/패딩도 축소 */
+  tr[data-weekrow="1"]{ height: var(--weeknum-h); }
+  tr[data-weekrow="1"] td{
+    text-align:center;
+    padding: var(--weeknum-pad-v) var(--weeknum-pad-h);
+    font-size: var(--weeknum-font);
+    line-height:1;
+    border-color: transparent; /* 테두리 감춤 유지 */
+  }
 
   /* 기본 테두리는 감춤 → 내용/강한 배경만 테두리 */
   td{
@@ -42,7 +55,7 @@
     word-break:break-word;
     font-size:12px;
     line-height:1.15;
-    overflow:hidden; /* 셀은 커지지 않음 */
+    overflow:hidden;
   }
   td.bordered{ border-color:#e6e6e6; }
 </style>
@@ -68,10 +81,8 @@
   </div>
 
 <script>
-  /* 한 주(일자줄~다음 일자줄 사이) 목표 ‘콘텐츠 행 개수’ */
-  const TARGET_WEEK_ROWS = 4; // 촘촘함 ↑ (5로 바꾸면 조금 넓어짐)
+  const TARGET_WEEK_ROWS = 4;
 
-  /* ===== 레이아웃 ===== */
   function relayout(){
     const nav  = document.getElementById('nav');
     const top  = document.getElementById('top-bar');
@@ -84,7 +95,6 @@
   window.addEventListener('load', relayout);
   window.addEventListener('resize', () => { relayout(); uniformizeAllWeeks(); shrinkAllText(); });
 
-  /* ===== 데이터 ===== */
   const api = (qs) => `/api/schedule${qs ? ('?' + qs) : ''}`;
   const $select  = document.getElementById('sheetSelect');
   const $refresh = document.getElementById('refreshBtn');
@@ -141,8 +151,6 @@
       }
       setLoading('');
       relayout();
-
-      // 주 구간 균일화 → 글자 축소
       uniformizeAllWeeks();
       shrinkAllText();
     }catch(e){
@@ -151,7 +159,6 @@
     }
   }
 
-  /* ===== 네트워크 유틸 ===== */
   async function fetchJsonRetry(url, { retries = 5, signal } = {}){
     let attempt = 0;
     while (true){
@@ -178,7 +185,6 @@
     }
   }
 
-  /* ===== 렌더 유틸 ===== */
   function parseMonth(sheetName){
     const m = parseInt(String(sheetName).replace(/\D+/g,''),10);
     return isNaN(m) ? (new Date().getMonth()+1) : m;
@@ -202,15 +208,11 @@
 
   function visibleText(cell){
     if(cell?.html){
-      return String(cell.html).replace(/<br\s*\/?>/gi,' ')
-                              .replace(/&nbsp;/gi,' ')
-                              .replace(/<[^>]*>/g,'')
-                              .trim();
+      return String(cell.html).replace(/<br\s*\/?>/gi,' ').replace(/&nbsp;/gi,' ').replace(/<[^>]*>/g,'').trim();
     }
     return String(cell?.text ?? '').trim();
   }
 
-  // 작은 날짜 숫자(01~31)만 모여있는 줄인지 감지
   function isWeekNumberRow(rowCells, cols){
     let countDigits = 0, countCells = 0;
     for(let c=0; c<cols; c++){
@@ -223,7 +225,6 @@
     return countDigits >= Math.max(5, Math.floor(cols*0.6));
   }
 
-  /* ===== 렌더 ===== */
   function renderTeam(team, { sheetName, year } = {}){
     const card = document.createElement('section'); card.className = 'card';
     const bar  = document.createElement('div'); bar.className = 'teambar'; bar.textContent = `${team.id}팀`; card.appendChild(bar);
@@ -238,7 +239,6 @@
     let dayCounter = 1;
     let weekIdx    = -1;
 
-    // 병합 반영 그리드
     const grid = Array.from({length: team.rows}, () => Array(team.cols).fill(null));
     for (const cell of team.cells){
       const r0 = cell.r - 1, c0 = cell.c - 1;
@@ -271,7 +271,6 @@
           const textNow = visibleText(cell);
 
           if (weekNumberRow){
-            // 일자(숫자) 줄
             if (/^\d{1,2}$/.test(textNow)){
               const pos     = (weekIdx * 7) + c - firstDow + 1;
               const inMonth = (pos >= 1 && pos <= lastDay);
@@ -289,11 +288,9 @@
             }
 
           } else {
-            // 일반 데이터 줄
             if (cell.html && textNow !== '') td.innerHTML = cell.html;
             else { if (cell.fc) td.style.color = cell.fc; td.textContent = textNow; }
 
-            // 전폭 회색 + 비어있음 → 'N일(요일)' 자동 표기
             const colspan = cell.colspan || 1;
             const looksEmpty = (textNow === '');
             const nearFullWidth = (team.cols - colspan) <= 1;
@@ -305,7 +302,6 @@
               dayCounter++;
             }
 
-            // 내용/진한 배경이면만 테두리 표시
             const hasText = (td.textContent && td.textContent.trim() !== '') || (cell.html && visibleText(cell) !== '');
             const strongBg = cell.bg && !isGrayColor(cell.bg);
             if (hasText || strongBg) td.classList.add('bordered');
@@ -324,14 +320,12 @@
     return card;
   }
 
-  /* ===== 주 높이 균일화 ===== */
   function uniformizeAllWeeks(){
     document.querySelectorAll('.table-wrap table').forEach(tbl => {
       const rows = Array.from(tbl.querySelectorAll('tr'));
       const baseRowH = parseFloat(getComputedStyle(tbl).getPropertyValue('--row-h')) || 26;
       const targetBlockPx = TARGET_WEEK_ROWS * baseRowH;
 
-      // 날짜줄 인덱스 수집
       const weekIdxs = rows
         .map((tr, i) => tr.dataset.weekrow === '1' ? i : -1)
         .filter(i => i >= 0);
@@ -348,17 +342,15 @@
     });
   }
 
-  /* ===== 셀 텍스트 자동 축소 ===== */
   function shrinkAllText(){
-    const MIN = 8;   // 최소 글자(px) — 촘촘하게 보기 위해 8까지 허용
-    const MAX = 12;  // 기본 글자(px)
+    const MIN = 8;
+    const MAX = 12;
 
     document.querySelectorAll('.table-wrap table').forEach(tbl => {
       tbl.querySelectorAll('td').forEach(td => {
         td.style.fontSize  = MAX + 'px';
         td.style.lineHeight = '1.15';
       });
-      // 날짜 숫자 줄은 제외
       tbl.querySelectorAll('tr:not([data-weekrow="1"]) td').forEach(td => shrinkToFit(td, MIN));
     });
   }
@@ -386,8 +378,7 @@
     }
   }
 
-  /* ===== 공통 ===== */
-  function setLoading(msg){ $status.textContent = msg || ''; }
+  function setLoading(msg){ document.getElementById('status').textContent = msg || ''; }
   function showError(e){ console.error(e); setLoading(`오류: ${e?.message || e}`); }
   function esc(s){ return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
 </script>
