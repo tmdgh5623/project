@@ -85,7 +85,7 @@
 
   /* 플레이스홀더(강제 줄 채움) */
   tr.placeholder-sched td{ background:#fff; }
-  tr.placeholder-note  td{ background:#e9c7c7; } /* 붉은 톤 */
+  tr.placeholder-note  td{ background:#e9c7c7; } /* 붉은 톤의 기타 줄(데이터 없을 때) */
 </style>
 </head>
 <body>
@@ -110,8 +110,8 @@
 
 <script>
   /* ===== 옵션 ===== */
-  const MIN_FONT_PX = 9;
-  const MAX_FONT_PX = 12;
+  const MIN_FONT_PX = 9;   // 최소 폰트(px)
+  const MAX_FONT_PX = 12;  // 기본 폰트(px)
 
   /* 고정 구조: 주당 스케줄 4줄 + 기타(빨간) 1줄 */
   const SCHEDULE_ROWS_PER_WEEK = 4;
@@ -133,7 +133,7 @@
   window.addEventListener('resize', () => {
     relayout();
     clearTimeout(resizeTimer);
-    resizeTimer = setTimeout(()=> { unifyWeeksByTypeHeights(); shrinkAllText(); }, 50);
+    resizeTimer = setTimeout(()=> { normalizeWeeksToFixedRows(); unifyWeeksByTypeHeights(); shrinkAllText(); }, 50);
   });
 
   /* ===== 데이터 ===== */
@@ -197,9 +197,9 @@
 
       /* 순서: 구조 보정 → 높이 균일화 → 글자 맞춤 */
       await settleLayout();
-      normalizeWeeksToFixedRows();   // ✅ 부족한 줄/빨간줄 보충
+      normalizeWeeksToFixedRows();   // ✅ 주당 4(스케줄)+1(기타) 강제 & 여분 병합
       await settleLayout();
-      unifyWeeksByTypeHeights();     // ✅ 모든 줄 같은 높이로 배분
+      unifyWeeksByTypeHeights();     // ✅ 모든 줄 높이 균등
       await settleLayout();
       resetFonts();
       shrinkAllText();               // ✅ 폰트 축소 + 라인 클램프
@@ -399,7 +399,13 @@
           td.textContent = '';
         }
 
-        wrapCellContent(td);
+        // 래퍼 보장
+        let box = td.querySelector('.cell');
+        if(!box){
+          box = document.createElement('div'); box.className='cell';
+          while (td.firstChild) box.appendChild(td.firstChild);
+          td.appendChild(box);
+        }
         tr.appendChild(td);
       }
       table.appendChild(tr);
@@ -410,69 +416,113 @@
     return card;
   }
 
-  function wrapCellContent(td){
-    if (td.querySelector(':scope > .cell')) return;
-    const wrapper = document.createElement('div');
-    wrapper.className = 'cell';
-    while (td.firstChild) wrapper.appendChild(td.firstChild);
-    td.appendChild(wrapper);
-  }
-
-  /* ===== 구조 보정: 주마다 4(스케줄)+1(빨간) 줄 강제 ===== */
+  /* ===== 구조 보정: 주마다 4(스케줄)+1(빨간) 줄 강제 & 여분 병합 ===== */
   function normalizeWeeksToFixedRows(){
     document.querySelectorAll('.table-wrap table').forEach(tbl=>{
-      const rows = Array.from(tbl.querySelectorAll('tr'));
-      const weekStarts = rows.map((tr,i)=> tr.dataset.weekrow==='1' ? i : -1).filter(i=>i>=0);
-      const cols = (rows[0]?.querySelectorAll('td').length) || 7;
+      const allRows = () => Array.from(tbl.querySelectorAll('tr'));
+      const rows0 = allRows();
+      const weekStarts = rows0.map((tr,i)=> tr.dataset.weekrow==='1' ? i : -1).filter(i=>i>=0);
+      const cols = Math.max(...rows0.map(r=> r.querySelectorAll('td').length)) || 7;
 
-      function isNoteRow(tr){
+      const ensureCell = (td)=>{
+        let box = td.querySelector('.cell');
+        if(!box){
+          box = document.createElement('div');
+          box.className='cell';
+          while(td.firstChild) box.appendChild(td.firstChild);
+          td.appendChild(box);
+        }
+        return box;
+      };
+      const isNoteRow = (tr)=>{
         const tds = Array.from(tr.querySelectorAll('td'));
         let red=0, span=0;
         tds.forEach(td=>{
-          const s=td.colSpan||1;
+          const s = td.colSpan || 1;
           const bg = getComputedStyle(td).backgroundColor || td.style.backgroundColor;
-          span+=s; if (isReddish(bg)) red+=s;
+          span += s;
+          const m = String(bg).match(/rgba?\((\d+)[,\s]+(\d+)[,\s]+(\d+)/);
+          if (m){ const r=+m[1], g=+m[2], b=+m[3]; if (r>=200 && r>g && r>b) red += s; }
         });
-        return span && (red/span)>=0.5;
-      }
+        return span && (red/span) >= 0.5;
+      };
+      const makeEmptyRow = (className)=>{
+        const tr = document.createElement('tr'); if (className) tr.className = className;
+        for(let c=0;c<cols;c++){
+          const td = document.createElement('td');
+          const box = document.createElement('div'); box.className='cell';
+          td.appendChild(box); tr.appendChild(td);
+        }
+        return tr;
+      };
+      const mergeRowInto = (src, dst)=>{
+        const dT = dst.querySelectorAll('td');
+        const sT = src.querySelectorAll('td');
+        const n  = Math.min(dT.length, sT.length, cols);
+        for(let j=0;j<n;j++){
+          const dstBox = ensureCell(dT[j]);
+          const srcBox = sT[j].querySelector('.cell');
+          const html   = srcBox ? srcBox.innerHTML.trim() : sT[j].innerHTML.trim();
+          if (html){
+            const div = document.createElement('div');
+            div.className = 'it';
+            div.innerHTML = html;
+            dstBox.appendChild(div);
+          }
+        }
+        src.remove();
+      };
 
       weekStarts.forEach((ws, idx)=>{
+        const rows = allRows();
         const next = weekStarts[idx+1] ?? rows.length;
-        // 본문 구간(숫자줄 다음부터 다음 주 숫자줄 전까지)
-        let start = ws + 1;
-        let end   = next;
+        const start = ws + 1;
+        const inRange = () => allRows().slice(start, next);
 
-        // 현 구간의 행 목록(실시간으로 변하니 매번 재조회)
-        const bodyRows = () => Array.from(tbl.querySelectorAll('tr')).slice(start, end);
+        let body   = inRange();
+        let scheds = body.filter(tr => !isNoteRow(tr));
+        let notes  = body.filter(tr =>  isNoteRow(tr));
 
-        // 스케줄/기타 분리
-        let BR = bodyRows();
-        let schedRows = BR.filter(tr => !isNoteRow(tr));
-        let noteRows  = BR.filter(tr =>  isNoteRow(tr));
-
-        // 1) 스케줄 줄이 부족하면 빈 줄 추가
-        for(let need = SCHEDULE_ROWS_PER_WEEK - schedRows.length; need > 0; need--){
-          const tr = document.createElement('tr'); tr.className='placeholder-sched';
-          for(let c=0;c<cols;c++){ tr.appendChild(document.createElement('td')).appendChild(document.createElement('div')).className='cell'; }
-          // 노트줄이 있으면 그 앞, 없으면 구간 끝에 삽입
-          const anchor = noteRows[0] || Array.from(tbl.querySelectorAll('tr'))[end-1]?.nextSibling;
-          tbl.tBodies[0].insertBefore(tr, noteRows[0] || Array.from(tbl.querySelectorAll('tr'))[end] || null);
-          end++; // 구간 끝 한 칸 뒤로
+        // 스케줄이 4줄 초과 → 4번째 줄로 병합
+        if (scheds.length > SCHEDULE_ROWS_PER_WEEK){
+          const keep = scheds.slice(0, SCHEDULE_ROWS_PER_WEEK);
+          for(let i=SCHEDULE_ROWS_PER_WEEK; i<scheds.length; i++){
+            mergeRowInto(scheds[i], keep[SCHEDULE_ROWS_PER_WEEK-1]);
+          }
         }
 
-        // 2) 기타 줄이 없으면 1줄 추가
-        BR = bodyRows();
-        schedRows = BR.filter(tr => !isNoteRow(tr));
-        noteRows  = BR.filter(tr =>  isNoteRow(tr));
-        if (noteRows.length < NOTE_ROWS_PER_WEEK){
-          const tr = document.createElement('tr'); tr.className='placeholder-note';
-          for(let c=0;c<cols;c++){ tr.appendChild(document.createElement('td')).appendChild(document.createElement('div')).className='cell'; }
-          tbl.tBodies[0].insertBefore(tr, Array.from(tbl.querySelectorAll('tr'))[end] || null);
-          end++;
+        // 최신화
+        body   = inRange();
+        scheds = body.filter(tr => !isNoteRow(tr));
+        notes  = body.filter(tr =>  isNoteRow(tr));
+
+        // 스케줄 줄 부족 → 노트 앞에 빈 줄 추가
+        for(let need = SCHEDULE_ROWS_PER_WEEK - scheds.length; need > 0; need--){
+          const tr = makeEmptyRow('placeholder-sched');
+          const anchor = notes[0] || allRows()[next] || null;
+          tbl.tBodies[0].insertBefore(tr, anchor);
         }
 
-        // 이후 루프를 위해 최신 rows 갱신
-        rows.splice(0, rows.length, ...Array.from(tbl.querySelectorAll('tr')));
+        // 최신화
+        body   = inRange();
+        scheds = body.filter(tr => !isNoteRow(tr));
+        notes  = body.filter(tr =>  isNoteRow(tr));
+
+        // 노트 줄이 1줄 초과 → 첫 줄로 병합
+        if (notes.length > NOTE_ROWS_PER_WEEK){
+          const keep = notes[0];
+          for(let i=1;i<notes.length;i++) mergeRowInto(notes[i], keep);
+        }
+
+        // 최신화
+        body   = inRange();
+        notes  = body.filter(tr =>  isNoteRow(tr));
+
+        // 노트 줄 없음 → 1줄 추가
+        if (notes.length < NOTE_ROWS_PER_WEEK){
+          const tr = makeEmptyRow('placeholder-note');
+          tbl.tBodies[0].insertBefore(tr, allRows()[next] || null);
+        }
       });
     });
   }
@@ -527,7 +577,7 @@
     }
   }
 
-  /* ===== 균일 높이 배분(요일/날짜/스케줄4/기타1) + 바닥 여백 0 ===== */
+  /* ===== 균일 높이 배분(요일/날짜/스케줄4/기타1) ===== */
   function unifyWeeksByTypeHeights(){
     const tables = Array.from(document.querySelectorAll('.table-wrap table'));
     if (!tables.length) return;
@@ -546,16 +596,9 @@
     function getWeekBlock(rows, startIdx, nextStartIdx){
       const start = startIdx + 1, end = (nextStartIdx ?? rows.length);
       const body  = rows.slice(start, end);
-      const schedRows = body.filter(tr => !isNoteRow(tr));
-      const noteRows  = body.filter(tr =>  isNoteRow(tr));
+      const schedRows = body.filter(tr => !isNoteRow(tr)).slice(0, SCHEDULE_ROWS_PER_WEEK);
+      const noteRows  = body.filter(tr =>  isNoteRow(tr)).slice(0, NOTE_ROWS_PER_WEEK);
       return { schedRows, noteRows };
-    }
-
-    function setFixedHeight(trs, h){
-      trs.forEach(tr=>{
-        tr.style.height = `${h}px`;
-        tr.querySelectorAll('td').forEach(td=> td.style.height='100%');
-      });
     }
 
     tables.forEach(tbl=>{
@@ -574,33 +617,34 @@
       const headerH  = (hasDow ? dowH : 0) + (weeks * weeknumH);
 
       const avail = Math.max(50, wrapH - headerH); // 스케줄+기타 전체
-      const unitPerWeek = SCHEDULE_ROWS_PER_WEEK + NOTE_ROWS_PER_WEEK; // =5
-      const unit = Math.floor(avail / (weeks * unitPerWeek)); // 한 칸 기본 높이
-      let remainder = Math.max(0, avail - (weeks * unit * unitPerWeek));
+      if (weeks <= 0 || !isFinite(avail) || avail <= 0) return;
 
-      // 주마다 동일: 스케줄 4칸, 기타 1칸
+      // 주별로 동일한 총 높이 배분
+      const perWeekBase = Math.floor(avail / weeks);
+      let leftoverWeeks = avail - perWeekBase * weeks; // 남는 px(주 단위로 분배)
+
+      // 주 내부: 스케줄4 : 기타1 비율
+      const schedRowH  = Math.floor((perWeekBase * 4) / 5);
+      const noteRowH0  = perWeekBase - schedRowH * 4; // 반올림 보정 포함
+
       weekStarts.forEach((ws, idx)=>{
         const next = weekStarts[idx+1];
         const { schedRows, noteRows } = getWeekBlock(rows, ws, next);
 
-        // 혹시 구조 보정이 안 됐으면 여기서도 맞춤
-        const sched = schedRows.slice(0, SCHEDULE_ROWS_PER_WEEK);
-        const note  = noteRows.slice(0, NOTE_ROWS_PER_WEEK);
+        // 스케줄 4줄 동일
+        schedRows.forEach(tr=>{
+          tr.style.height = `${schedRowH}px`;
+          tr.querySelectorAll('td').forEach(td=> td.style.height = '100%');
+        });
 
-        let schedUnit = unit;
-        let noteUnit  = unit;
+        // 노트 1줄 동일 + 남는 주픽셀 분배(앞주부터 1px씩)
+        const noteH = noteRowH0 + (leftoverWeeks > 0 ? 1 : 0);
+        if (leftoverWeeks > 0) leftoverWeeks--;
 
-        // 남은 픽셀은 스케줄 줄에 1px씩 배분(기타는 항상 동일)
-        let extra = Math.min(remainder, SCHEDULE_ROWS_PER_WEEK);
-        remainder -= extra;
-
-        const perSchedHeights = Array(SCHEDULE_ROWS_PER_WEEK).fill(schedUnit);
-        for(let i=0;i<extra;i++) perSchedHeights[i] += 1;
-
-        // 적용
-        setFixedHeight(sched, perSchedHeights[0]); // 모든 스케줄줄 동일 px
-        sched.forEach(tr=> tr.style.height = perSchedHeights[0] + 'px');
-        setFixedHeight(note , noteUnit);
+        noteRows.forEach(tr=>{
+          tr.style.height = `${noteH}px`;
+          tr.querySelectorAll('td').forEach(td=> td.style.height = '100%');
+        });
       });
     });
   }
