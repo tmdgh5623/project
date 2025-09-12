@@ -25,7 +25,7 @@
     grid-template-columns:1fr 1fr;
     gap:14px;
     height:100%;
-    grid-auto-rows:100%;           /* 각 행이 페이지 높이 = 화면에 항상 카드 2개 */
+    grid-auto-rows:100%;
     align-content:start;
   }
   @media (max-width:980px){ .grid{ grid-template-columns:1fr; grid-auto-rows:100%; } }
@@ -40,9 +40,8 @@
   .table-wrap{ flex:1 1 auto; overflow:hidden; }
   table{
     border-collapse:collapse; width:100%; table-layout:fixed; height:100%;
-    /* 고정 줄 높이 변수 */
-    --dow-h:         22px;  /* 요일(일/월/…/토) 줄 */
-    --weeknum-h:     10px;  /* 날짜 숫자 줄(작은 숫자) */
+    --dow-h:         22px;  /* 요일 줄 */
+    --weeknum-h:     10px;  /* 날짜 숫자 줄 */
     --weeknum-font:   8px;
     --weeknum-pad-v:  1px;
     --weeknum-pad-h:  3px;
@@ -82,8 +81,11 @@
 
   /* 내용 래퍼(넘침 감지/축소용) */
   td > .cell{ display:block; height:100%; overflow:hidden; }
-  /* 일정 항목 블록(자동 분할 결과) */
   td .it{ display:block; margin-bottom:1px; }
+
+  /* 플레이스홀더(강제 줄 채움) */
+  tr.placeholder-sched td{ background:#fff; }
+  tr.placeholder-note  td{ background:#e9c7c7; } /* 붉은 톤 */
 </style>
 </head>
 <body>
@@ -108,12 +110,12 @@
 
 <script>
   /* ===== 옵션 ===== */
-  const MIN_FONT_PX = 9;   // 최소 폰트(px)
-  const MAX_FONT_PX = 12;  // 기본 폰트(px)
+  const MIN_FONT_PX = 9;
+  const MAX_FONT_PX = 12;
 
-  /* 주당 “스케줄:기타(빨간)” 비율 단위 */
-  const SCHEDULE_UNITS_PER_WEEK = 4;
-  const NOTE_UNITS_PER_WEEK     = 1;
+  /* 고정 구조: 주당 스케줄 4줄 + 기타(빨간) 1줄 */
+  const SCHEDULE_ROWS_PER_WEEK = 4;
+  const NOTE_ROWS_PER_WEEK     = 1;
 
   /* ===== 레이아웃 ===== */
   function relayout(){
@@ -131,7 +133,7 @@
   window.addEventListener('resize', () => {
     relayout();
     clearTimeout(resizeTimer);
-    resizeTimer = setTimeout(()=> unifyWeeksByTypeHeights(), 50);
+    resizeTimer = setTimeout(()=> { unifyWeeksByTypeHeights(); shrinkAllText(); }, 50);
   });
 
   /* ===== 데이터 ===== */
@@ -187,19 +189,21 @@
       $grid.innerHTML = '';
       const year = data.year || (new Date()).getFullYear();
       for(const team of data.teams){
-        $grid.appendChild(renderTeam(team, { sheetName, year }));
+        const card = renderTeam(team, { sheetName, year });
+        $grid.appendChild(card);
       }
       setLoading('');
       relayout();
 
-      /* ==== 순서 & 안정화 ==== */
+      /* 순서: 구조 보정 → 높이 균일화 → 글자 맞춤 */
+      await settleLayout();
+      normalizeWeeksToFixedRows();   // ✅ 부족한 줄/빨간줄 보충
+      await settleLayout();
+      unifyWeeksByTypeHeights();     // ✅ 모든 줄 같은 높이로 배분
+      await settleLayout();
       resetFonts();
-      autoSplitSchedules();          // 셀 내 여러 항목 자동 분할
-      await settleLayout();
-      unifyWeeksByTypeHeights();     // ✅ 먼저 고정 높이 배분 (내용이 칸을 키우지 못함)
-      await settleLayout();
-      shrinkAllText();               // ✅ 그 다음 칸 안에 맞게 폰트축소 + 라인클램프
-      requestAnimationFrame(()=>{ shrinkAllText(); }); // 안전 1회 더
+      shrinkAllText();               // ✅ 폰트 축소 + 라인 클램프
+      requestAnimationFrame(()=> shrinkAllText()); // 안전 1회 더
     }catch(e){
       if (e.name === 'AbortError') return;
       showError(e);
@@ -351,11 +355,9 @@
     for (let r=0; r<team.rows; r++){
       const tr = document.createElement('tr');
 
-      // 요일 줄
       const dowRow = (r === 0 && isDowHeaderRow(grid[r], team.cols));
       if (dowRow) tr.dataset.dowrow = '1';
 
-      // 날짜 숫자 줄
       const weekNumberRow = isWeekNumberRow(grid[r], team.cols);
       if (weekNumberRow) { weekIdx++; tr.dataset.weekrow = '1'; }
 
@@ -416,12 +418,71 @@
     td.appendChild(wrapper);
   }
 
+  /* ===== 구조 보정: 주마다 4(스케줄)+1(빨간) 줄 강제 ===== */
+  function normalizeWeeksToFixedRows(){
+    document.querySelectorAll('.table-wrap table').forEach(tbl=>{
+      const rows = Array.from(tbl.querySelectorAll('tr'));
+      const weekStarts = rows.map((tr,i)=> tr.dataset.weekrow==='1' ? i : -1).filter(i=>i>=0);
+      const cols = (rows[0]?.querySelectorAll('td').length) || 7;
+
+      function isNoteRow(tr){
+        const tds = Array.from(tr.querySelectorAll('td'));
+        let red=0, span=0;
+        tds.forEach(td=>{
+          const s=td.colSpan||1;
+          const bg = getComputedStyle(td).backgroundColor || td.style.backgroundColor;
+          span+=s; if (isReddish(bg)) red+=s;
+        });
+        return span && (red/span)>=0.5;
+      }
+
+      weekStarts.forEach((ws, idx)=>{
+        const next = weekStarts[idx+1] ?? rows.length;
+        // 본문 구간(숫자줄 다음부터 다음 주 숫자줄 전까지)
+        let start = ws + 1;
+        let end   = next;
+
+        // 현 구간의 행 목록(실시간으로 변하니 매번 재조회)
+        const bodyRows = () => Array.from(tbl.querySelectorAll('tr')).slice(start, end);
+
+        // 스케줄/기타 분리
+        let BR = bodyRows();
+        let schedRows = BR.filter(tr => !isNoteRow(tr));
+        let noteRows  = BR.filter(tr =>  isNoteRow(tr));
+
+        // 1) 스케줄 줄이 부족하면 빈 줄 추가
+        for(let need = SCHEDULE_ROWS_PER_WEEK - schedRows.length; need > 0; need--){
+          const tr = document.createElement('tr'); tr.className='placeholder-sched';
+          for(let c=0;c<cols;c++){ tr.appendChild(document.createElement('td')).appendChild(document.createElement('div')).className='cell'; }
+          // 노트줄이 있으면 그 앞, 없으면 구간 끝에 삽입
+          const anchor = noteRows[0] || Array.from(tbl.querySelectorAll('tr'))[end-1]?.nextSibling;
+          tbl.tBodies[0].insertBefore(tr, noteRows[0] || Array.from(tbl.querySelectorAll('tr'))[end] || null);
+          end++; // 구간 끝 한 칸 뒤로
+        }
+
+        // 2) 기타 줄이 없으면 1줄 추가
+        BR = bodyRows();
+        schedRows = BR.filter(tr => !isNoteRow(tr));
+        noteRows  = BR.filter(tr =>  isNoteRow(tr));
+        if (noteRows.length < NOTE_ROWS_PER_WEEK){
+          const tr = document.createElement('tr'); tr.className='placeholder-note';
+          for(let c=0;c<cols;c++){ tr.appendChild(document.createElement('td')).appendChild(document.createElement('div')).className='cell'; }
+          tbl.tBodies[0].insertBefore(tr, Array.from(tbl.querySelectorAll('tr'))[end] || null);
+          end++;
+        }
+
+        // 이후 루프를 위해 최신 rows 갱신
+        rows.splice(0, rows.length, ...Array.from(tbl.querySelectorAll('tr')));
+      });
+    });
+  }
+
   /* ===== 폰트 초기화/축소 ===== */
   function resetFonts(){
     document.querySelectorAll('.table-wrap table td .cell').forEach(cell => {
       cell.style.fontSize  = MAX_FONT_PX + 'px';
       cell.style.lineHeight = '1.15';
-      // 클램프 해제(이전 상태 초기화)
+      // 클램프 해제
       cell.style.display = '';
       cell.style.webkitBoxOrient = '';
       cell.style.webkitLineClamp = '';
@@ -454,7 +515,7 @@
       if (fs <= minPx) break;
     }
 
-    /* 최저 폰트까지 내려도 넘치면 줄수로 잘라내기(클램프) */
+    // 최저 폰트까지 내려도 넘치면 줄수로 잘라내기(클램프)
     if (el.scrollHeight > el.clientHeight || el.scrollWidth > el.clientWidth){
       const cs = getComputedStyle(el);
       const lh = parseFloat(cs.lineHeight) || (parseFloat(cs.fontSize) * 1.15) || 12;
@@ -466,74 +527,35 @@
     }
   }
 
-  /* 스케줄(붉은줄 제외 전부)만 항목 분할 */
-  function autoSplitSchedules(){
-    document.querySelectorAll('.table-wrap table tr:not([data-weekrow="1"])').forEach(tr=>{
-      tr.querySelectorAll('td').forEach(td=>{
-        const bg = getComputedStyle(td).backgroundColor || td.style.backgroundColor;
-        if (isReddish(bg)) return; // 인원/기타 줄은 분할하지 않음
-        const box = td.querySelector('.cell'); if(!box) return;
-        if (box.querySelector('.it')) return;
-        const html = box.innerHTML;
-
-        if (/<br\s*\/?>/i.test(html)){
-          const parts = html.replace(/&nbsp;/gi,' ')
-                            .replace(/<br\s*\/?>/gi,'\n')
-                            .split(/\n+/).map(s=>s.trim()).filter(Boolean);
-          if (parts.length>=2){ box.innerHTML = parts.map(p=>`<div class="it">${esc(p)}</div>`).join(''); return; }
-        }
-        if (box.children.length===0){
-          const txt = (box.textContent||'').trim();
-          const parts = txt.split(/(?:\s*[,/;·•]\s*|\n)+/).map(s=>s.trim()).filter(Boolean);
-          if (parts.length>=2){ box.innerHTML = parts.map(p=>`<div class="it">${esc(p)}</div>`).join(''); }
-        }
-      });
-    });
-  }
-
-  /* ===== 타입별 고정 간격(요일/날짜/스케줄/기타) & 바닥 여백 0 ===== */
+  /* ===== 균일 높이 배분(요일/날짜/스케줄4/기타1) + 바닥 여백 0 ===== */
   function unifyWeeksByTypeHeights(){
     const tables = Array.from(document.querySelectorAll('.table-wrap table'));
     if (!tables.length) return;
 
-    function classifyRowByRed(tr){
+    function isNoteRow(tr){
       const tds = Array.from(tr.querySelectorAll('td'));
-      let red = 0, span = 0;
+      let red=0, span=0;
       tds.forEach(td=>{
-        const s = td.colSpan || 1;
+        const s=td.colSpan||1;
         const bg = getComputedStyle(td).backgroundColor || td.style.backgroundColor;
-        span += s; if (isReddish(bg)) red += s;
+        span+=s; if (isReddish(bg)) red+=s;
       });
-      return (span && (red/span) >= 0.5) ? 'note' : 'sched';
+      return span && (red/span)>=0.5;
     }
+
     function getWeekBlock(rows, startIdx, nextStartIdx){
       const start = startIdx + 1, end = (nextStartIdx ?? rows.length);
       const body  = rows.slice(start, end);
-      const schedRows = [], noteRows = [];
-      body.forEach(tr => (classifyRowByRed(tr) === 'note' ? noteRows : schedRows).push(tr));
+      const schedRows = body.filter(tr => !isNoteRow(tr));
+      const noteRows  = body.filter(tr =>  isNoteRow(tr));
       return { schedRows, noteRows };
     }
-    function distribute(rowsArr, target){
-      if (!rowsArr?.length || !isFinite(target) || target <= 0) return;
-      const base = Math.max(8, Math.floor(target / rowsArr.length));
-      rowsArr.forEach(tr=>{
-        tr.style.height = base + 'px';
-        tr.querySelectorAll('td').forEach(td => td.style.height = '100%');
+
+    function setFixedHeight(trs, h){
+      trs.forEach(tr=>{
+        tr.style.height = `${h}px`;
+        tr.querySelectorAll('td').forEach(td=> td.style.height='100%');
       });
-      let used = base * rowsArr.length;
-      let leftover = Math.round(target - used);
-      if (leftover){
-        const last = rowsArr[rowsArr.length - 1];
-        last.style.height = (base + leftover) + 'px';
-      }
-      // 미세 보정
-      const total = rowsArr.reduce((sm,tr)=> sm + tr.getBoundingClientRect().height, 0);
-      const delta = Math.round(target - total);
-      if (delta){
-        const last = rowsArr[rowsArr.length - 1];
-        const cur = parseFloat(getComputedStyle(last).height) || base;
-        last.style.height = (cur + delta) + 'px';
-      }
     }
 
     tables.forEach(tbl=>{
@@ -551,37 +573,34 @@
       const hasDow   = rows.length && rows[0].dataset.dowrow === '1';
       const headerH  = (hasDow ? dowH : 0) + (weeks * weeknumH);
 
-      const avail = Math.max(50, wrapH - headerH);            // 스케줄+기타 합계에 쓸 높이
-      const unitPerWeek = SCHEDULE_UNITS_PER_WEEK + NOTE_UNITS_PER_WEEK;
-      const unit = Math.floor(avail / (weeks * unitPerWeek)); // 1단위 높이(정수)
-      const schedTarget = unit * SCHEDULE_UNITS_PER_WEEK;     // 주당 스케줄 높이
-      const noteTarget  = unit * NOTE_UNITS_PER_WEEK;         // 주당 기타 높이
-      const weekTarget  = schedTarget + noteTarget;
+      const avail = Math.max(50, wrapH - headerH); // 스케줄+기타 전체
+      const unitPerWeek = SCHEDULE_ROWS_PER_WEEK + NOTE_ROWS_PER_WEEK; // =5
+      const unit = Math.floor(avail / (weeks * unitPerWeek)); // 한 칸 기본 높이
+      let remainder = Math.max(0, avail - (weeks * unit * unitPerWeek));
 
-      // ✅ 남은 픽셀을 ‘기타(note)’에 균등 배분해 바닥 여백 0 보장
-      const usedTotal = weeks * weekTarget;
-      let remainder   = Math.max(0, avail - usedTotal);
-      const extraPerWeek = Math.floor(remainder / Math.max(1,weeks));
-      let   extraTail    = remainder - extraPerWeek * Math.max(1,weeks);
-
-      // 주별 적용
+      // 주마다 동일: 스케줄 4칸, 기타 1칸
       weekStarts.forEach((ws, idx)=>{
         const next = weekStarts[idx+1];
         const { schedRows, noteRows } = getWeekBlock(rows, ws, next);
 
-        let schedH = schedTarget;
-        let noteH  = noteTarget + extraPerWeek;
-        if (extraTail > 0){ noteH += 1; extraTail--; }
+        // 혹시 구조 보정이 안 됐으면 여기서도 맞춤
+        const sched = schedRows.slice(0, SCHEDULE_ROWS_PER_WEEK);
+        const note  = noteRows.slice(0, NOTE_ROWS_PER_WEEK);
 
-        if (schedRows.length && noteRows.length){
-          distribute(schedRows, schedH);
-          distribute(noteRows , noteH );
-        }else if (schedRows.length){
-          // 데이터에 기타줄이 없으면 스케줄에 합산(표는 꽉 채움)
-          distribute(schedRows, schedH + noteH);
-        }else if (noteRows.length){
-          distribute(noteRows , schedH + noteH);
-        }
+        let schedUnit = unit;
+        let noteUnit  = unit;
+
+        // 남은 픽셀은 스케줄 줄에 1px씩 배분(기타는 항상 동일)
+        let extra = Math.min(remainder, SCHEDULE_ROWS_PER_WEEK);
+        remainder -= extra;
+
+        const perSchedHeights = Array(SCHEDULE_ROWS_PER_WEEK).fill(schedUnit);
+        for(let i=0;i<extra;i++) perSchedHeights[i] += 1;
+
+        // 적용
+        setFixedHeight(sched, perSchedHeights[0]); // 모든 스케줄줄 동일 px
+        sched.forEach(tr=> tr.style.height = perSchedHeights[0] + 'px');
+        setFixedHeight(note , noteUnit);
       });
     });
   }
