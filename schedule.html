@@ -6,12 +6,22 @@
 <title>월간 스케줄</title>
 <style>
   /* ===== 기본 레이아웃 ===== */
-  html, body { height:100%; margin:0; overflow:hidden;
-    font-family:system-ui,-apple-system,Segoe UI,Roboto,'Noto Sans KR',sans-serif; color:#222; }
-  .nav{ background:#2c3e50; color:#fff; padding:10px; display:flex; justify-content:flex-end; gap:10px; position:sticky; top:0; z-index:1000; }
-  .nav button{ background:#fff; color:#000; border:none; border-radius:4px; padding:6px 12px; cursor:pointer; }
+  html, body {
+    height:100%; margin:0; overflow:hidden;
+    font-family:system-ui,-apple-system,Segoe UI,Roboto,'Noto Sans KR',sans-serif; color:#222;
+  }
+  .nav{
+    background:#2c3e50; color:#fff; padding:10px; display:flex;
+    justify-content:flex-end; gap:10px; position:sticky; top:0; z-index:1000;
+  }
+  .nav button{
+    background:#fff; color:#000; border:none; border-radius:4px; padding:6px 12px; cursor:pointer;
+  }
 
-  #top-bar{ background:#f0f0f0; border-bottom:1px solid #ddd; padding:8px 15px; display:flex; align-items:center; gap:10px; position:sticky; top:0; z-index:900; }
+  #top-bar{
+    background:#f0f0f0; border-bottom:1px solid #ddd; padding:8px 15px;
+    display:flex; align-items:center; gap:10px; position:sticky; top:0; z-index:900;
+  }
   #top-bar h1{ font-size:18px; margin:0; }
   #top-bar select, #top-bar button{ padding:5px 10px; font-size:14px; border:1px solid #dcdcdc; border-radius:8px; background:#fff; }
   #status{ color:#666; font-size:13px; margin-left:4px; }
@@ -26,8 +36,7 @@
   /* ===== 표 기본 ===== */
   .table-wrap{ overflow:visible; }
   table{
-    border-collapse:collapse;
-    width:100%; table-layout:fixed;
+    border-collapse:collapse; width:100%; table-layout:fixed;
     --row-h: 26px;
     --weeknum-h: 10px;       /* 날짜 숫자줄 고정 높이 */
     --weeknum-font: 8px;
@@ -88,9 +97,8 @@
   const MIN_FONT_PX = 9;
   const MAX_FONT_PX = 12;
 
-  /* “원본 규칙” 고정값: 날짜 1 + 스케줄 4 + 기타 1 */
-  const SCHEDULE_ROWS_PER_WEEK = 4;
-  const NOTE_ROWS_PER_WEEK     = 1;
+  // 모든 팀/모든 주 높이 동일화를 위한 퍼센타일(극단치 배제)
+  const UNIFORM_PCTL = 0.85; // 0.75~0.9 사이 권장
 
   /* ===== 레이아웃 ===== */
   function relayout(){
@@ -104,7 +112,6 @@
   }
   window.addEventListener('load', relayout);
 
-  /* 초기/스크롤바로 인한 폭 변화 등 디바운스 */
   let resizeTimer=null;
   window.addEventListener('resize', () => {
     relayout();
@@ -170,16 +177,15 @@
       setLoading('');
       relayout();
 
-      /* ==== 순서 & 안정화 대기 ==== */
+      /* ==== 순서 & 안정화 ==== */
       resetFonts();
-      autoSplitSchedules();
-
-      await settleLayout();   // 분할 후 레이아웃/폰트 확정 대기
-      shrinkAllText();
-
-      await settleLayout();   // 폰트 축소 반영 후 다시 대기
-      unifyWeeksByMax();      // 1차 통일
-      requestAnimationFrame(unifyWeeksByMax); // 2차 스냅(스크롤바/폰트로 인한 미세 변화 흡수)
+      autoSplitSchedules();      // 한 셀 안 여러 항목을 자동 분할
+      await settleLayout();      // 분할 반영 안정화
+      shrinkAllText();           // 칸 안에 맞게 자동 축소
+      await settleLayout();
+      unifyWeeksByMax();         // 균일 높이 적용(1차)
+      requestAnimationFrame(unifyWeeksByMax); // 스크롤바/폰트 변화 흡수(2차)
+      requestAnimationFrame(()=>{ shrinkAllText(); }); // 혹시 모를 오버플로우 1회 더 축소
     }catch(e){
       if (e.name === 'AbortError') return;
       showError(e);
@@ -189,9 +195,9 @@
   /* ===== 프레임/폰트 안정화 유틸 ===== */
   function nextFrame(){ return new Promise(r => requestAnimationFrame(()=>r())); }
   async function settleLayout(){
-    await nextFrame();              // 1프레임 대기
-    await nextFrame();              // 추가 1프레임(분할/축소 반영)
-    if (document.fonts?.ready) {    // 폰트 로딩 완료 대기(지원 브라우저)
+    await nextFrame();
+    await nextFrame();
+    if (document.fonts?.ready) {
       try { await document.fonts.ready; } catch {}
     }
   }
@@ -245,7 +251,6 @@
     return false;
   }
 
-  /* 빨간(인원/기타) 배경 판별 (fallback 용) */
   function isReddish(c){
     if(!c) return false;
     c = String(c).trim().toLowerCase();
@@ -276,17 +281,18 @@
     return String(cell?.text ?? '').trim();
   }
 
-  // "작은 날짜 숫자" 줄 감지
+  // "작은 날짜 숫자" 줄 감지(숫자 다수 + 밝은 배경 비율)
   function isWeekNumberRow(rowCells, cols){
-    let countDigits = 0, countCells = 0;
+    let digits = 0, lightBg = 0, total = 0;
     for(let c=0; c<cols; c++){
       const cell = rowCells[c];
       if(cell === 'skip') continue;
-      countCells++;
+      total++;
       const t = visibleText(cell);
-      if(/^\d{1,2}$/.test(t)) countDigits++;
+      if(/^\d{1,2}$/.test(t)) digits++;
+      if(isGrayColor(cell?.bg)) lightBg++;
     }
-    return countDigits >= Math.max(5, Math.floor(cols*0.6));
+    return digits >= Math.max(5, Math.floor(cols*0.6)) && lightBg >= Math.floor(total*0.4);
   }
 
   /* ===== 팀 카드 렌더 ===== */
@@ -301,8 +307,7 @@
     const lastDay  = daysInMonth(year, month);
     const firstDow = new Date(year, month-1, 1).getDay();
 
-    let dayCounter = 1;
-    let weekIdx    = -1;
+    let weekIdx = -1;
 
     // 병합 반영 그리드
     const grid = Array.from({length: team.rows}, () => Array(team.cols).fill(null));
@@ -337,6 +342,7 @@
           const textNow = visibleText(cell);
 
           if (weekNumberRow){
+            // 날짜 숫자 줄 스타일링
             if (/^\d{1,2}$/.test(textNow)){
               const pos     = (weekIdx * 7) + c - firstDow + 1;
               const inMonth = (pos >= 1 && pos <= lastDay);
@@ -354,20 +360,12 @@
             }
 
           } else {
+            // 내용 줄 렌더
             if (cell.html && textNow !== '') td.innerHTML = cell.html;
             else { if (cell.fc) td.style.color = cell.fc; td.textContent = textNow; }
 
-            // 전폭 회색 + 비어있음 → 'N일(요일)' 자동 표기
-            const colspan = cell.colspan || 1;
-            const looksEmpty = (textNow === '');
-            const nearFullWidth = (team.cols - colspan) <= 1;
-            if (looksEmpty && nearFullWidth && isGrayColor(cell.bg)){
-              if (dayCounter <= lastDay){
-                td.textContent = `${dayCounter}일(${dowKR(year, month, dayCounter)})`;
-                td.style.fontWeight = '700';
-              }
-              dayCounter++;
-            }
+            /* ✅ 자동 날짜(전폭 회색 빈칸 → 'N일(요일)') 표기는 비활성화.
+               월 흐름 꼬임/주 경계 오류 원인 제거 */
           }
 
         } else {
@@ -447,96 +445,104 @@
     });
   }
 
-  /* ===== 핵심: 모든 팀/모든 주의 스케줄/기타 높이 완전 통일 ===== */
+  /* ===== 균일 높이 모드: 모든 팀/모든 주 동일 ===== */
+
+  function percentile(arr, p){
+    if (!arr?.length) return 0;
+    const a = [...arr].sort((x,y)=>x-y);
+    const i = Math.min(a.length-1, Math.max(0, Math.round((a.length-1)*p)));
+    return a[i];
+  }
+
   function unifyWeeksByMax(){
     const tables = Array.from(document.querySelectorAll('.table-wrap table'));
     if (!tables.length) return;
 
-    // 1) 각 표의 주 시작 인덱스 수집
+    // 1) 주 경계 수집
     const structures = tables.map(tbl=>{
       const rows = Array.from(tbl.querySelectorAll('tr'));
       const weekStarts = rows.map((tr,i)=> tr.dataset.weekrow==='1' ? i : -1).filter(i=>i>=0);
       return { tbl, rows, weekStarts };
     });
 
-    // 2) 주별 타깃(최대) 높이 계산: 스케줄(4줄 총합), 기타(1줄)
-    const maxWeeks = Math.max(...structures.map(s=>s.weekStarts.length), 0);
-    const targets = Array.from({length:maxWeeks}, ()=>({sched:0, note:0}));
-
-    function pickWeekBands(rows, startIdx, nextStartIdx){
-      const blockStart = startIdx + 1;
-      const blockEnd   = (nextStartIdx ?? rows.length); // exclusive
-      // 우선 고정 규칙(4+1)으로 취함
-      let schedRows = rows.slice(blockStart, Math.min(blockStart + SCHEDULE_ROWS_PER_WEEK, blockEnd));
-      let noteRows  = rows.slice(blockStart + SCHEDULE_ROWS_PER_WEEK, Math.min(blockStart + SCHEDULE_ROWS_PER_WEEK + NOTE_ROWS_PER_WEEK, blockEnd));
-
-      // 만약 길이가 부족하면(표가 깨진 주), 붉은줄 탐지로 보정
-      if (schedRows.length < SCHEDULE_ROWS_PER_WEEK || noteRows.length < NOTE_ROWS_PER_WEEK){
-        let splitAt = -1;
-        for (let i=blockStart; i<blockEnd; i++){
-          const tr = rows[i];
-          const tds = Array.from(tr.querySelectorAll('td'));
-          const [rSum, spanSum] = tds.reduce((acc,td)=>{
-            const span = td.colSpan || 1;
-            const bg = getComputedStyle(td).backgroundColor || td.style.backgroundColor;
-            const r = isReddish(bg) ? span : 0;
-            return [acc[0]+r, acc[1]+span];
-          }, [0,0]);
-          if (spanSum && (rSum/spanSum) >= 0.5){ splitAt = i; break; } // 보조 기준
-        }
-        if (splitAt !== -1){
-          schedRows = rows.slice(blockStart, splitAt);
-          noteRows  = rows.slice(splitAt, Math.min(splitAt + 1, blockEnd));
-        }
-      }
+    // 2) 주 블록에서 스케줄행/기타행(빨간 배경) 분리
+    function classifyRowByRed(tr){
+      const tds = Array.from(tr.querySelectorAll('td'));
+      let red = 0, span = 0;
+      tds.forEach(td=>{
+        const s = td.colSpan || 1;
+        const bg = getComputedStyle(td).backgroundColor || td.style.backgroundColor;
+        span += s;
+        if (isReddish(bg)) red += s;
+      });
+      return (span && (red/span) >= 0.5) ? 'note' : 'sched';
+    }
+    function getWeekBlock(rows, startIdx, nextStartIdx){
+      const start = startIdx + 1;
+      const end   = (nextStartIdx ?? rows.length);
+      const body  = rows.slice(start, end);
+      const schedRows = [], noteRows = [];
+      body.forEach(tr => (classifyRowByRed(tr) === 'note' ? noteRows : schedRows).push(tr));
       return { schedRows, noteRows };
     }
 
-    // 타깃 수집
+    // 3) 전체 표본 수집(모든 팀·모든 주)
+    const schedSamples = [];
+    const noteSamples  = [];
     structures.forEach(s=>{
       s.weekStarts.forEach((ws, idx)=>{
         const next = s.weekStarts[idx+1];
-        const { schedRows, noteRows } = pickWeekBands(s.rows, ws, next);
-
+        const { schedRows, noteRows } = getWeekBlock(s.rows, ws, next);
         const schedH = schedRows.reduce((sum,tr)=> sum + tr.getBoundingClientRect().height, 0);
         const noteH  = noteRows.reduce((sum,tr)=> sum + tr.getBoundingClientRect().height, 0);
-
-        targets[idx].sched = Math.max(targets[idx].sched, Math.round(schedH));
-        targets[idx].note  = Math.max(targets[idx].note , Math.round(noteH));
+        if (schedH > 0) schedSamples.push(Math.round(schedH));
+        if (noteH  > 0) noteSamples .push(Math.round(noteH ));
       });
     });
 
-    // 3) 분배 함수: 균등 + 잔여 픽셀 + 실제 합계 보정
+    // 4) 전역 목표값(퍼센타일) 결정
+    const schedTarget = Math.max(20, Math.round(percentile(schedSamples, UNIFORM_PCTL) || 80));
+    const noteTarget  = Math.max(10, Math.round(percentile(noteSamples , UNIFORM_PCTL) || 26));
+    const weekTarget  = schedTarget + noteTarget;
+
+    // 5) 균등 분배(+잔여 픽셀 보정)
     function distribute(rowsArr, target){
-      if (!rowsArr || !rowsArr.length || !isFinite(target) || target<=0) return;
+      if (!rowsArr?.length || !isFinite(target) || target <= 0) return;
       const base = Math.max(10, Math.floor(target / rowsArr.length));
       rowsArr.forEach(tr=>{
         tr.style.height = base + 'px';
-        tr.querySelectorAll('td').forEach(td=> td.style.height = '100%');
+        tr.querySelectorAll('td').forEach(td => td.style.height = '100%');
       });
       let used = base * rowsArr.length;
       let leftover = Math.round(target - used);
       if (leftover){
-        const last = rowsArr[rowsArr.length-1];
+        const last = rowsArr[rowsArr.length - 1];
         last.style.height = (base + leftover) + 'px';
       }
-      // 최종 보정(테두리/반올림)
+      // 경계/반올림 보정
       const total = rowsArr.reduce((s,tr)=> s + tr.getBoundingClientRect().height, 0);
       const delta = Math.round(target - total);
       if (delta){
-        const last = rowsArr[rowsArr.length-1];
+        const last = rowsArr[rowsArr.length - 1];
         const cur = parseFloat(getComputedStyle(last).height) || base;
         last.style.height = (cur + delta) + 'px';
       }
     }
 
-    // 4) 적용: 같은 주의 모든 팀에 동일 타깃
+    // 6) 적용: 모든 팀·모든 주 동일한 주 합계 높이 강제
     structures.forEach(s=>{
       s.weekStarts.forEach((ws, idx)=>{
         const next = s.weekStarts[idx+1];
-        const { schedRows, noteRows } = pickWeekBands(s.rows, ws, next);
-        distribute(schedRows, targets[idx].sched);
-        distribute(noteRows , targets[idx].note );
+        const { schedRows, noteRows } = getWeekBlock(s.rows, ws, next);
+
+        if (schedRows.length && noteRows.length){
+          distribute(schedRows, schedTarget);
+          distribute(noteRows , noteTarget );
+        }else if (schedRows.length){
+          distribute(schedRows, weekTarget);
+        }else if (noteRows.length){
+          distribute(noteRows , weekTarget);
+        }
       });
     });
   }
@@ -545,7 +551,7 @@
   function setLoading(msg){ $status.textContent = msg || ''; }
   function showError(e){ console.error(e); setLoading(`오류: ${e?.message || e}`); }
   function esc(s){
-    const map = {"&":"&amp;","<":"&lt;","<": "&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"};
+    const map = {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"};
     return String(s).replace(/[&<>"']/g, ch => map[ch]);
   }
 </script>
